@@ -1,6 +1,7 @@
+#![allow(dead_code)]
 
 // copied from https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
-fn murmur_hash3_x64_128(input: &[u8], seed: u32) -> [u64;2] {
+pub fn murmur_hash3_x64_128(input: &[u8], seed: u32) -> [u64;2] {
     let nblocks=input.len()/16;
     let mut h1=seed as u64;
     let mut h2=seed as u64;
@@ -123,7 +124,7 @@ fn murmur_hash3_x64_128(input: &[u8], seed: u32) -> [u64;2] {
 }
 
 // copied from https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
-fn murmur_hash3_32(input: &[u8], seed: u32) -> u32 {
+pub fn murmur_hash3_32(input: &[u8], seed: u32) -> u32 {
     let nblocks=input.len()/4;
     let mut h1=seed as u32;
     let c1=0xcc9e2d51u32;
@@ -147,13 +148,13 @@ fn murmur_hash3_32(input: &[u8], seed: u32) -> u32 {
     let mut k1=0u32;
 
     if tail.len()>=3{
-        k1^=(tail[2] as u32)<<16;
+        k1^=(unsafe{*tail.get_unchecked(2)} as u32)<<16;
     }
     if tail.len()>=2{
-        k1^=(tail[1] as u32)<<8;
+        k1^=(unsafe{*tail.get_unchecked(1)} as u32)<<8;
     }
     if tail.len()>=1{
-        k1^=(tail[0] as u32)<<0;
+        k1^=(unsafe{*tail.get_unchecked(0)} as u32)<<0;
 
         k1=k1.wrapping_mul(c1);
         k1=k1.rotate_left(15);

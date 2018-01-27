@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 // copied from https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
-pub fn murmur_hash3_x64_128(input: &[u8], seed: u32) -> [u64;2] {
+pub fn murmur_hash3_x64_128(input: &[u8], seed: u32) -> (u64,u64) {
     let nblocks=input.len()/16;
     let mut h1=seed as u64;
     let mut h2=seed as u64;
@@ -120,7 +120,7 @@ pub fn murmur_hash3_x64_128(input: &[u8], seed: u32) -> [u64;2] {
     h1=h1.wrapping_add(h2);
     h2=h2.wrapping_add(h1);
 
-    [h1,h2]
+    (h1,h2)
 }
 
 // copied from https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
@@ -143,7 +143,7 @@ pub fn murmur_hash3_32(input: &[u8], seed: u32) -> u32 {
     }
 
     let tail=&input[nblocks*4..];
-    assert!(tail.len()<4);
+    // assert!(tail.len()<4);
 
     let mut k1=0u32;
 

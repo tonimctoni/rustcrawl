@@ -18,6 +18,14 @@ Also, the reservoir of urls to be crawled is finite. If full, inserts remove ran
 
  - If reservoir is running out of space, the urls per crawl should be reduced.
 
- - Already used urls might get added to the reservoir, see if it is worth it to change that.
+ - Already used urls might get added to the reservoir, see if it is worth it to change that (use unique_gathered, unique_visited).
 
- - Add a check/set in one method to unique.
+ <!-- - Add a check/set in one method to unique. -->
+
+ - Add logger struct that logs errors.
+
+ - Make sure to use large unique when deploying.
+
+ - Use atomic counter to count gathered and visited pages. Maybe log this every so often. Also count css files.
+
+ - Document everything (as in, write comments and use rustdoc).

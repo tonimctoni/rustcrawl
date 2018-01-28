@@ -33,6 +33,21 @@ impl Unique {
 
         seed_pairs.all(|(s1,s2)| self.unique_array[(s1>>3) as usize]&((1<<(s1&7)) as u8)!=0 && self.unique_array[(s2>>3) as usize]&((1<<(s2&7)) as u8)!=0)
     }
+
+    pub fn contains_add(&mut self, item: &[u8]) -> bool{
+        let seed_pairs=self.seeds.iter().map(|&x| murmur::murmur_hash3_32(item, x)).map(|x| (x>>16,x&0xffff));
+        let mut contains=true;
+
+        for (s1,s2) in seed_pairs{
+            if (self.unique_array[(s1>>3) as usize]&((1<<(s1&7)) as u8))|(self.unique_array[(s2>>3) as usize]&((1<<(s2&7)) as u8))==0{
+                contains=false;
+                self.unique_array[(s1>>3) as usize]|=1<<((s1&7) as u8);
+                self.unique_array[(s2>>3) as usize]|=1<<((s2&7) as u8);
+            }
+        }
+
+        contains
+    }
 }
 
 const LARGE_ARRAY_SIZE: usize = 536870912;
@@ -75,30 +90,62 @@ impl LargeUnique {
             self.unique_array[(s4>>3) as usize]&((1<<(s4&7)) as u8)!=0
             )
     }
+
+    pub fn contains_add(&mut self, item: &[u8]) -> bool{
+        let fourwise_hashes=self.seeds.iter().map(|&x| murmur::murmur_hash3_x64_128(item, x)).map(|(x1,x2)| (x1>>32, x1&0xffffffff, x2>>32, x2&0xffffffff));
+        let mut contains=true;
+
+        for (s1,s2,s3,s4) in fourwise_hashes{
+            if  (self.unique_array[(s1>>3) as usize]&((1<<(s1&7)) as u8)) |
+                (self.unique_array[(s2>>3) as usize]&((1<<(s2&7)) as u8)) |
+                (self.unique_array[(s3>>3) as usize]&((1<<(s3&7)) as u8)) |
+                (self.unique_array[(s4>>3) as usize]&((1<<(s4&7)) as u8))==0{
+
+                contains=false;
+                self.unique_array[(s1>>3) as usize]|=1<<((s1&7) as u8);
+                self.unique_array[(s2>>3) as usize]|=1<<((s2&7) as u8);
+                self.unique_array[(s3>>3) as usize]|=1<<((s3&7) as u8);
+                self.unique_array[(s4>>3) as usize]|=1<<((s4&7) as u8);
+            }
+        }
+
+        contains
+    }
 }
 
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::str;
 
     #[test]
     fn test_unique() {
         let mut unique=Unique::new(vec![0xa4a759a4, 0xe5f20661, 0x85684b56, 0xba444a10]);
 
-        let to_add=[b"hello" as &[u8], b"NaN" as &[u8], b"" as &[u8], b"ohle" as &[u8], b"some rather long string just because. And just in case, lets make it even longer :D" as &[u8], b"1" as &[u8]];
-        let not_to_add=[b"bye" as &[u8], b"ehlo" as &[u8], b"lello" as &[u8], b"_" as &[u8], b"another rather long string just because. And just in case, lets make it even longer :D" as &[u8], b"0" as &[u8]];
+        let to_add=[b"1" as &[u8], b"hello" as &[u8], b"NaN" as &[u8], b"" as &[u8], b"ohle" as &[u8], b"some rather long string just because. And just in case, lets make it even longer :D" as &[u8]];
+        let not_to_add=[b"0" as &[u8], b"bye" as &[u8], b"ehlo" as &[u8], b"lello" as &[u8], b"_" as &[u8], b"another rather long string just because. And just in case, lets make it even longer :D" as &[u8]];
+        let to_add_later=[b"2" as &[u8], b"12" as &[u8], b"123" as &[u8], b"1234" as &[u8], b"12345" as &[u8], b"some longer string I guess" as &[u8]];
+
 
         for s in to_add.iter(){
             unique.add(s);
         }
 
         for s in to_add.iter(){
-            assert!(unique.contains(s), format!("Unique says a word that was added is not contained. ({:?})", s));
+            assert!(unique.contains(s), format!("Unique says a word that was added is not contained. ({:?})", str::from_utf8(s)));
         }
 
         for s in not_to_add.iter(){
-            assert!(!unique.contains(s), format!("Unique says a word that was not added is contained. ({:?})", s));
+            assert!(!unique.contains(s), format!("Unique says a word that was not added is contained. ({:?})", str::from_utf8(s)));
+        }
+
+        for s in to_add_later.iter(){
+            assert!(unique.contains_add(s)==false, format!("Unique says a word that was not added is contained (contains_add). ({:?})", str::from_utf8(s)));
+        }
+
+        for s in to_add_later.iter(){
+            assert!(unique.contains_add(s)==true, format!("Unique says a word that was added is not contained (contains_add). ({:?})", str::from_utf8(s)));
         }
     }
 
@@ -106,19 +153,29 @@ mod tests {
     fn test_large_unique() {
         let mut unique=LargeUnique::new(vec![0xa4a759a4, 0xe5f20661]);
 
-        let to_add=[b"hello" as &[u8], b"NaN" as &[u8], b"" as &[u8], b"ohle" as &[u8], b"some rather long string just because. And just in case, lets make it even longer :D" as &[u8], b"1" as &[u8]];
-        let not_to_add=[b"bye" as &[u8], b"ehlo" as &[u8], b"lello" as &[u8], b"_" as &[u8], b"another rather long string just because. And just in case, lets make it even longer :D" as &[u8], b"0" as &[u8]];
+        let to_add=[b"1" as &[u8], b"hello" as &[u8], b"NaN" as &[u8], b"" as &[u8], b"ohle" as &[u8], b"some rather long string just because. And just in case, lets make it even longer :D" as &[u8]];
+        let not_to_add=[b"0" as &[u8], b"bye" as &[u8], b"ehlo" as &[u8], b"lello" as &[u8], b"_" as &[u8], b"another rather long string just because. And just in case, lets make it even longer :D" as &[u8]];
+        let to_add_later=[b"2" as &[u8], b"12" as &[u8], b"123" as &[u8], b"1234" as &[u8], b"12345" as &[u8], b"some longer string I guess" as &[u8]];
+
 
         for s in to_add.iter(){
             unique.add(s);
         }
 
         for s in to_add.iter(){
-            assert!(unique.contains(s), format!("Unique says a word that was added is not contained. ({:?})", s));
+            assert!(unique.contains(s), format!("Unique says a word that was added is not contained. ({:?})", str::from_utf8(s)));
         }
 
         for s in not_to_add.iter(){
-            assert!(!unique.contains(s), format!("Unique says a word that was not added is contained. ({:?})", s));
+            assert!(!unique.contains(s), format!("Unique says a word that was not added is contained. ({:?})", str::from_utf8(s)));
+        }
+
+        for s in to_add_later.iter(){
+            assert!(unique.contains_add(s)==false, format!("Unique says a word that was not added is contained (contains_add). ({:?})", str::from_utf8(s)));
+        }
+
+        for s in to_add_later.iter(){
+            assert!(unique.contains_add(s)==true, format!("Unique says a word that was added is not contained (contains_add). ({:?})", str::from_utf8(s)));
         }
     }
 }

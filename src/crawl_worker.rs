@@ -107,12 +107,7 @@ pub fn worker(mut css_sender: sync::mpsc::Sender<String>, unique: sync::Arc<sync
                 Err(_) => break,
             };
 
-            if mutex_guard.contains(url.as_bytes()){
-                true
-            } else {
-                mutex_guard.add(url.as_bytes());
-                false
-            }
+            mutex_guard.contains_add(url.as_bytes())
         };
 
         if url_has_been_used{

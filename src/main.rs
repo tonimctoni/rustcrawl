@@ -15,6 +15,13 @@ mod url_reservoir;
 const NUM_THREADS: usize = 100;
 const ALLOWED_CHARS: &str = "abcdefghijklmnopqrstuvwxzy0123456789\n\t\r \"'(){}[]+-*/.,:;_@#%$!?=\\<>~^|&`";
 
+
+/// Checks wether the input string `s` contains only allowed characters.
+///
+/// # Arguments
+///
+/// * `s` - String to be checked.
+///
 fn contains_only_allowed_chars(s: &String) -> bool{
     s
     .chars()

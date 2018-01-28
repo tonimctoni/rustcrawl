@@ -4,6 +4,9 @@ use murmur;
 
 const ARRAY_SIZE: usize = 8192;
 
+/// Data structure that elements can be added to, such that when shown a new element,
+/// it can decide if it has been added. Here, added means its hash stays saved.
+/// It uses a bloom filter to this end.
 #[derive(Clone)]
 pub struct Unique{
     unique_array: Box<[u8;ARRAY_SIZE]>,
@@ -12,6 +15,11 @@ pub struct Unique{
 
 // Uses bloom filter
 impl Unique {
+    /// Creates and returns a new Unique structure.
+    ///
+    /// # Arguments
+    ///
+    /// * `seeds` - seeds to be used for hashing. More seeds yield less collissions.
     pub fn new(seeds: Vec<u32>) -> Unique {
         Unique{
             unique_array: Box::new([0u8;ARRAY_SIZE]), // use box syntax as soon as there is an updated compiler (lazy admin is lazy)
@@ -19,6 +27,11 @@ impl Unique {
         }
     }
 
+    /// Adds an element to the Unique structure.
+    ///
+    /// # Arguments
+    ///
+    /// * `item` - byte slice representation of element to be hashed.
     pub fn add(&mut self, item: &[u8]){
         let seed_pairs=self.seeds.iter().map(|&x| murmur::murmur_hash3_32(item, x)).map(|x| (x>>16,x&0xffff));
 
@@ -28,12 +41,23 @@ impl Unique {
         }
     }
 
+    /// Checks whether an element was added to the Unique structure.
+    ///
+    /// # Arguments
+    ///
+    /// * `item` - byte slice representation of element to be hashed.
     pub fn contains(&self, item: &[u8]) -> bool{
         let mut seed_pairs=self.seeds.iter().map(|&x| murmur::murmur_hash3_32(item, x)).map(|x| (x>>16,x&0xffff));
 
         seed_pairs.all(|(s1,s2)| self.unique_array[(s1>>3) as usize]&((1<<(s1&7)) as u8)!=0 && self.unique_array[(s2>>3) as usize]&((1<<(s2&7)) as u8)!=0)
     }
 
+    /// Checks whether an element was added to the Unique structure. If it was not,
+    /// it gets added. The result of the check gets returned.
+    ///
+    /// # Arguments
+    ///
+    /// * `item` - byte slice representation of element to be hashed.
     pub fn contains_add(&mut self, item: &[u8]) -> bool{
         let seed_pairs=self.seeds.iter().map(|&x| murmur::murmur_hash3_32(item, x)).map(|x| (x>>16,x&0xffff));
         let mut contains=true;
@@ -52,6 +76,10 @@ impl Unique {
 
 const LARGE_ARRAY_SIZE: usize = 536870912;
 
+/// Data structure that elements can be added to, such that when shown a new element,
+/// it can decide if it has been added. Here, added means its hash stays saved.
+/// It uses a bloom filter to this end.
+/// This is a larger version of Unique, which occupies 512 MB of memory.
 #[derive(Clone)]
 pub struct LargeUnique{
     unique_array: Vec<u8>, // use box of array as soon as box syntax is here (lazy adming is lazy, again)
@@ -60,6 +88,11 @@ pub struct LargeUnique{
 
 // Uses bloom filter
 impl LargeUnique {
+    /// Creates and returns a new LargeUnique structure.
+    ///
+    /// # Arguments
+    ///
+    /// * `seeds` - seeds to be used for hashing. More seeds yield less collissions.
     pub fn new(seeds: Vec<u32>) -> LargeUnique {
         let mut vector=Vec::new();
         vector.resize(LARGE_ARRAY_SIZE, 0);
@@ -69,6 +102,11 @@ impl LargeUnique {
         }
     }
 
+    /// Adds an element to the LargeUnique structure.
+    ///
+    /// # Arguments
+    ///
+    /// * `item` - byte slice representation of element to be hashed.
     pub fn add(&mut self, item: &[u8]){
         let fourwise_hashes=self.seeds.iter().map(|&x| murmur::murmur_hash3_x64_128(item, x)).map(|(x1,x2)| (x1>>32, x1&0xffffffff, x2>>32, x2&0xffffffff));
 
@@ -80,6 +118,11 @@ impl LargeUnique {
         }
     }
 
+    /// Checks whether an element was added to the LargeUnique structure.
+    ///
+    /// # Arguments
+    ///
+    /// * `item` - byte slice representation of element to be hashed.
     pub fn contains(&self, item: &[u8]) -> bool{
         let mut fourwise_hashes=self.seeds.iter().map(|&x| murmur::murmur_hash3_x64_128(item, x)).map(|(x1,x2)| (x1>>32, x1&0xffffffff, x2>>32, x2&0xffffffff));
 
@@ -91,6 +134,12 @@ impl LargeUnique {
             )
     }
 
+    /// Checks whether an element was added to the LargeUnique structure. If it
+    /// was not, it gets added. The result of the check gets returned.
+    ///
+    /// # Arguments
+    ///
+    /// * `item` - byte slice representation of element to be hashed.
     pub fn contains_add(&mut self, item: &[u8]) -> bool{
         let fourwise_hashes=self.seeds.iter().map(|&x| murmur::murmur_hash3_x64_128(item, x)).map(|(x1,x2)| (x1>>32, x1&0xffffffff, x2>>32, x2&0xffffffff));
         let mut contains=true;

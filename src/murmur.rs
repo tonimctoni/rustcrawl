@@ -1,6 +1,14 @@
 #![allow(dead_code)]
 
-// copied from https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
+
+/// Calculates the 128-bit murmur3 hash for x64 architectures.
+///
+/// # Arguments
+///
+/// * `input` - Data to calculate the hash of.
+/// * `seed` - Seed for the hash.
+///
+/// copied from https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
 pub fn murmur_hash3_x64_128(input: &[u8], seed: u32) -> (u64,u64) {
     let nblocks=input.len()/16;
     let mut h1=seed as u64;
@@ -121,7 +129,14 @@ pub fn murmur_hash3_x64_128(input: &[u8], seed: u32) -> (u64,u64) {
     (h1,h2)
 }
 
-// copied from https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
+/// Calculates the 32-bit murmur3 hash.
+///
+/// # Arguments
+///
+/// * `input` - Data to calculate the hash of.
+/// * `seed` - Seed for the hash.
+///
+/// copied from https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
 pub fn murmur_hash3_32(input: &[u8], seed: u32) -> u32 {
     let nblocks=input.len()/4;
     let mut h1=seed as u32;

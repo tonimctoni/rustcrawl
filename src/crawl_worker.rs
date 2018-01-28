@@ -12,6 +12,7 @@ use std::time;
 const MAX_URLS_PER_SITE: usize = 100;
 const SLEEP_SECONDS_PER_LOOP: u64 = 1;
 
+/// Composite error structure for easier error handling.
 #[derive(Debug)]
 enum CompositeError {
     ReqwestError(reqwest::Error),
@@ -37,7 +38,17 @@ impl From<()> for CompositeError {
     }
 }
 
-
+/// Opens and reads `url`. If it contains html, it searches the html text for links
+/// and returns the found links. If it contains css, it sends the css text via the
+/// `css_sender` channel and returns an empty vector. If it contains something else,
+/// an empty vector is also returned.
+///
+/// # Arguments
+///
+/// * `url` - Url to request.
+/// * `client` - Client to requests urls with.
+/// * `re` - Regular expression to find links in html text.
+/// * `css_sender` - Sender channel to send css text through if found.
 fn get_urls_send_css(url: url::Url, client: &reqwest::Client, re: &regex::Regex, css_sender: &mut sync::mpsc::Sender<String>) -> Result<Vec<String>, CompositeError>{
     enum ContentType{
         Html,
@@ -98,7 +109,17 @@ fn get_urls_send_css(url: url::Url, client: &reqwest::Client, re: &regex::Regex,
     }
 }
 
-
+/// Within an endless loop, it obtains an url from the `url_reservoir` and crawls
+/// it with `get_urls_send_css`. Found urls are added to `url_reservoir` and `unique`
+/// if not contained in `unique`. If css text is found, it is sent via the `css_sender`
+/// channel. After successfully crawling the `url`, `urls_crawled` is incremented.
+///
+/// # Arguments
+///
+/// * `css_sender` - Sender channel to send css text through when found.
+/// * `unique` - Unique structure that helps avoiding crawling the same url several times.
+/// * `url_reservoir` - UrlReservoir structure to get urls from and add urls to.
+/// * `urls_crawled` - Atomic counter that keeps track of the ammount of urls crawled.
 pub fn worker(mut css_sender: sync::mpsc::Sender<String>, unique: sync::Arc<sync::Mutex<unique::LargeUnique>>, url_reservoir: sync::Arc<sync::Mutex<url_reservoir::UrlReservoir>>, urls_crawled: sync::Arc<sync::atomic::AtomicUsize>){
     let client=reqwest::Client::new();
     let re=regex::Regex::new("(?:href=|src=|url=)[\"']?([^\"' <>]*)").unwrap();
@@ -120,9 +141,6 @@ pub fn worker(mut css_sender: sync::mpsc::Sender<String>, unique: sync::Arc<sync
                 None => {println!("Error: {:?}", "reservoir is empty");continue;},
             }
         };
-
-        // println!("{:?}", url);
-        // println!("{:?}, {:?}", i, url);
 
         // Check if url has been crawled already. If not, add to unique and go on. If yes, continue.
         let url_has_been_used={

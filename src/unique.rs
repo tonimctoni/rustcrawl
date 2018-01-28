@@ -19,14 +19,6 @@ impl Unique {
         }
     }
 
-    // fn set_bit(&mut self, i: usize){
-    //     self.unique_array[i>>3]|=((i&7) as u8)<<1;
-    // }
-
-    // fn get_bit(&self, i: usize) -> bool{
-    //     self.unique_array[i>>3]&(((i&7) as u8)<<1)!=0
-    // }
-
     pub fn add(&mut self, item: &[u8]){
         let seed_pairs=self.seeds.iter().map(|&x| murmur::murmur_hash3_32(item, x)).map(|x| (x>>16,x&0xffff));
 
@@ -112,7 +104,7 @@ mod tests {
 
     #[test]
     fn test_large_unique() {
-        let mut unique=LargeUnique::new(vec![0xa4a759a4, 0xe5f20661, 0x85684b56, 0xba444a10]);
+        let mut unique=LargeUnique::new(vec![0xa4a759a4, 0xe5f20661]);
 
         let to_add=[b"hello" as &[u8], b"NaN" as &[u8], b"" as &[u8], b"ohle" as &[u8], b"some rather long string just because. And just in case, lets make it even longer :D" as &[u8], b"1" as &[u8]];
         let not_to_add=[b"bye" as &[u8], b"ehlo" as &[u8], b"lello" as &[u8], b"_" as &[u8], b"another rather long string just because. And just in case, lets make it even longer :D" as &[u8], b"0" as &[u8]];

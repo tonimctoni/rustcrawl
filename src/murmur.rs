@@ -9,8 +9,6 @@ pub fn murmur_hash3_x64_128(input: &[u8], seed: u32) -> (u64,u64) {
     let c2=0x4cf5ad432745937fu64;
 
     for i in 0..nblocks{
-        // let mut k1=(0..8).fold(0u64, |acc, n| acc|(input[i*16+n] as u64) << n);
-        // let mut k2=(0..8).fold(0u64, |acc, n| acc|(input[i*16+n+8] as u64) << n);
         let (mut k1, mut k2):(u64,u64)=unsafe{
             ((0..8).fold(0u64, |acc, n| acc|(*input.get_unchecked(i*16+n) as u64) << n),
             (0..8).fold(0u64, |acc, n| acc|(*input.get_unchecked(i*16+n+8) as u64) << n))

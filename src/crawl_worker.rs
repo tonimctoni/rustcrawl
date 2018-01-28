@@ -6,8 +6,11 @@ use std::sync;
 use unique;
 use url_reservoir;
 use rand;
+use thread;
+use std::time;
 
-const MAX_URLS_PER_SITE: usize = 40;
+const MAX_URLS_PER_SITE: usize = 100;
+const SLEEP_SECONDS_PER_LOOP: u64 = 1;
 
 #[derive(Debug)]
 enum CompositeError {
@@ -96,12 +99,15 @@ fn get_urls_send_css(url: url::Url, client: &reqwest::Client, re: &regex::Regex,
 }
 
 
-pub fn worker(mut css_sender: sync::mpsc::Sender<String>, unique: sync::Arc<sync::Mutex<unique::Unique>>, url_reservoir: sync::Arc<sync::Mutex<url_reservoir::UrlReservoir>>, urls_crawled: sync::Arc<sync::atomic::AtomicUsize>){
+pub fn worker(mut css_sender: sync::mpsc::Sender<String>, unique: sync::Arc<sync::Mutex<unique::LargeUnique>>, url_reservoir: sync::Arc<sync::Mutex<url_reservoir::UrlReservoir>>, urls_crawled: sync::Arc<sync::atomic::AtomicUsize>){
     let client=reqwest::Client::new();
     let re=regex::Regex::new("(?:href=|src=|url=)[\"']?([^\"' <>]*)").unwrap();
     let mut rng=rand::thread_rng();
 
+    let sleep_duration_per_loop=time::Duration::from_secs(SLEEP_SECONDS_PER_LOOP);
     loop {
+        thread::sleep(sleep_duration_per_loop);
+
         // Get url; continue if reservoir is impty, break if lock is broken.
         let url={
             let mut mutex_guard=match url_reservoir.lock() {
@@ -116,6 +122,7 @@ pub fn worker(mut css_sender: sync::mpsc::Sender<String>, unique: sync::Arc<sync
         };
 
         // println!("{:?}", url);
+        // println!("{:?}, {:?}", i, url);
 
         // Check if url has been crawled already. If not, add to unique and go on. If yes, continue.
         let url_has_been_used={

@@ -12,7 +12,7 @@ mod crawl_worker;
 mod url_reservoir;
 
 
-const NUM_THREADS: usize = 1;
+const NUM_THREADS: usize = 100;
 const ALLOWED_CHARS: &str = "abcdefghijklmnopqrstuvwxzy0123456789\n\t\r \"'(){}[]+-*/.,:;_@#%$!?=\\<>~^|&`";
 
 fn contains_only_allowed_chars(s: &String) -> bool{
@@ -23,8 +23,8 @@ fn contains_only_allowed_chars(s: &String) -> bool{
 
 fn main() {
     let (css_sender, css_receiver) = sync::mpsc::channel::<String>();
-    let unique=sync::Arc::new(sync::Mutex::new(unique::Unique::new(vec![0xb77c92ec, 0x660208ac])));
-    let url_reservoir=sync::Arc::new(sync::Mutex::new(url_reservoir::UrlReservoir::new(vec!["http://cssdb.co".to_string()])));
+    let unique=sync::Arc::new(sync::Mutex::new(unique::LargeUnique::new(vec![0xb77c92ec, 0x660208ac])));
+    let url_reservoir=sync::Arc::new(sync::Mutex::new(url_reservoir::UrlReservoir::new(vec!["http://cssdb.co".to_string()]))); // , "http://www.rust-lang.org".to_string(), "http://github.com".to_string(), "http://wikipedia.com".to_string()
     let urls_crawled=sync::Arc::new(sync::atomic::AtomicUsize::new(0));
 
     for _ in 0..NUM_THREADS{
@@ -37,7 +37,7 @@ fn main() {
         });
     }
 
-    let mut unique=unique::Unique::new(vec![0x5a14a940, 0xa87239b4]);
+    let mut unique=unique::LargeUnique::new(vec![0x5a14a940, 0xa87239b4]);
     let re_comments=regex::Regex::new(r"/\*(.|\n)*?\*/").unwrap();
     let re_breaklines=regex::Regex::new(r"\n{3,}").unwrap();
     let newline_char=std::char::from_u32(10).unwrap();
@@ -87,7 +87,17 @@ fn main() {
             };
             mutex_guard.available_space()
         };
-        println!("Urls urls_crawled: {:?}, Css found: {:?}, Css written: {:?}, Reservoir available space: {:?}", urls_crawled.load(sync::atomic::Ordering::Relaxed), css_found, css_written, reservoir_available_space);
+
+        let mut f=match fs::OpenOptions::new().append(true).create(true).open("csslog.txt") {
+            Ok(f) => f,
+            Err(e) => {println!("Error: {:?}", e);continue;},
+        };
+
+        match f.write_all(format!("[report] Urls urls_crawled: {:?}, Css found: {:?}, Css written: {:?}, Reservoir available space: {:?}\n", urls_crawled.load(sync::atomic::Ordering::Relaxed), css_found, css_written, reservoir_available_space).as_bytes()) {
+            Ok(_) => (),
+            Err(e) => {println!("Error: {:?}", e);continue;},
+        }
+        println!("[report] Urls urls_crawled: {:?}, Css found: {:?}, Css written: {:?}, Reservoir available space: {:?}", urls_crawled.load(sync::atomic::Ordering::Relaxed), css_found, css_written, reservoir_available_space);
     }
 
     println!("Crawler exited (somehow).");

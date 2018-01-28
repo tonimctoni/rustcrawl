@@ -21,8 +21,9 @@ Also, the reservoir of urls to be crawled is finite. If full, inserts remove ran
  - If reservoir is running out of space, the urls per crawl should be reduced.
     - Decided against it, actually. Revise later.
 
-<!--  - Already used urls might get added to the reservoir, see if it is worth it to change that (use unique_gathered, unique_visited).
-    - Actually, just not add urls to the reservoir that have been crawled already. Urls in reservoir might get discarded after all. -->
+ - Already used urls might get added to the reservoir, see if it is worth it to change that (use unique_gathered, unique_visited).
+    - Actually, just not add urls to the reservoir that have been crawled already. Urls in reservoir might get discarded after all.
+    - Actually actually, getting too many "url has been used" "errors", maybe use another unique.
 
  <!-- - Add a check/set in one method to unique. -->
 

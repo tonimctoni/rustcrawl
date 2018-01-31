@@ -2,7 +2,6 @@
 use rand;
 use rand::Rng;
 
-
 /// Data structure designed to hold a large but finite amount of strings. Adding
 /// strings beyond capacity replaces random strings. The strings are intended to
 /// represent urls, hence the name.
@@ -11,6 +10,7 @@ use rand::Rng;
 const RESERVOIR_SIZE: usize = 1024*1024;
 pub struct UrlReservoir {
     urls: Vec<String>,
+    rng: rand::StdRng,
 }
 
 impl UrlReservoir {
@@ -19,10 +19,10 @@ impl UrlReservoir {
     /// # Arguments
     ///
     /// * `starting_urls` - strings the structure should contain right after creation.
-    pub fn new(starting_urls: Vec<String>) -> UrlReservoir{
+    pub fn new(starting_urls: Vec<String>, rng: rand::StdRng) -> UrlReservoir{
         let mut urls=Vec::with_capacity(RESERVOIR_SIZE);
         urls.extend(starting_urls.into_iter());
-        UrlReservoir{urls: urls}
+        UrlReservoir{urls: urls, rng: rng}
     }
 
     /// Returns the ammount of strings that could be added to the UrlReservoir
@@ -37,8 +37,7 @@ impl UrlReservoir {
     /// # Arguments
     ///
     /// * `urls` - vector of strings to add to the UrlReservoir structure.
-    /// * `rng` - random number generator, needed to decide which strings to replace.
-    pub fn add_urls(&mut self, urls: Vec<String>, rng: &mut rand::ThreadRng){
+    pub fn add_urls(&mut self, urls: Vec<String>){
         let mut available_space=self.available_space();
         if available_space>=urls.len(){
             self.urls.extend(urls.into_iter());
@@ -49,7 +48,7 @@ impl UrlReservoir {
                     available_space-=1;
                 } else {
                     let len=self.urls.len();
-                    self.urls[(rng.next_u64()%(len as u64)) as usize]=url;
+                    self.urls[(self.rng.next_u64()%(len as u64)) as usize]=url;
                 }
             }
         }
@@ -58,16 +57,36 @@ impl UrlReservoir {
 
     /// Retrieves a random one of the contained strings, or None if the UrlReservoir
     /// structure is empty.
-    ///
-    /// # Arguments
-    ///
-    /// * `rng` - random number generator, needed to decide which strings to retrieve.
-    pub fn get_url(&mut self, rng: &mut rand::ThreadRng) -> Option<String>{
+    pub fn get_url(&mut self) -> Option<String>{
         let len=self.urls.len();
         if len==0{
             None
         } else{
-            Some(self.urls.swap_remove((rng.next_u64()%(len as u64)) as usize))
+            Some(self.urls.swap_remove((self.rng.next_u64()%(len as u64)) as usize))
         }
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand;
+
+    #[test]
+    fn test_url_reservoir() {
+        let mut url_reservoir=UrlReservoir::new(vec!["hello".to_string()], rand::StdRng::new().unwrap());
+        assert_eq!(url_reservoir.available_space(), RESERVOIR_SIZE-1);
+        assert_eq!(url_reservoir.get_url(), Some("hello".to_string()));
+        assert_eq!(url_reservoir.available_space(), RESERVOIR_SIZE);
+
+        url_reservoir.add_urls(vec!["1".to_string(), "1".to_string()]);
+        assert_eq!(url_reservoir.available_space(), RESERVOIR_SIZE-2);
+        assert_eq!(url_reservoir.get_url(), Some("1".to_string()));
+        assert_eq!(url_reservoir.available_space(), RESERVOIR_SIZE-1);
+        assert_eq!(url_reservoir.get_url(), Some("1".to_string()));
+        assert_eq!(url_reservoir.available_space(), RESERVOIR_SIZE);
+        assert_eq!(url_reservoir.get_url(), None);
+        assert_eq!(url_reservoir.available_space(), RESERVOIR_SIZE);
     }
 }

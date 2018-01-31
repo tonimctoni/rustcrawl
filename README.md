@@ -10,9 +10,11 @@ Also, the reservoir of urls to be crawled is finite. If full, inserts remove ran
 
  - Storing strings instead of urls makes it more space efficient, but less time efficient (worth it).
 
- - If all threads use tha same seed (which I dont know if they would) that is not a problem, as long as statistical properties for each individual thread are ok.
+ <!-- - If all threads use tha same seed (which I dont know if they would) that is not a problem, as long as statistical properties for each individual thread are ok. -->
 
  - Relaxed ordering for counters should be enought. Maybe ask someone who knows though. Then again, who knows.
+
+ - Using modulo to get random values within a range because rust's implementation of ind_sample seems needlessly complicated to me.
 
 # todo
 

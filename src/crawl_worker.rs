@@ -5,7 +5,6 @@ use regex;
 use std::sync;
 use bloom_filter;
 use url_reservoir;
-use rand;
 use thread;
 use std::time;
 
@@ -124,7 +123,6 @@ fn get_urls_send_css(url: url::Url, client: &reqwest::Client, re: &regex::Regex,
 pub fn worker(mut css_sender: sync::mpsc::Sender<String>, bloom_filter: sync::Arc<sync::Mutex<bloom_filter::LargeBloomFilter>>, url_reservoir: sync::Arc<sync::Mutex<url_reservoir::UrlReservoir>>, urls_crawled: sync::Arc<sync::atomic::AtomicUsize>){
     let client=reqwest::Client::new();
     let re=regex::Regex::new("(?:href=|src=|url=)[\"']?([^\"' <>]*)").unwrap();
-    let mut rng=rand::thread_rng();
 
     let sleep_duration_per_loop=time::Duration::from_secs(SLEEP_SECONDS_PER_LOOP);
     loop {
@@ -137,7 +135,7 @@ pub fn worker(mut css_sender: sync::mpsc::Sender<String>, bloom_filter: sync::Ar
                 Err(e) => {println!("Error: {:?}", e);break;},
             };
 
-            match mutex_guard.get_url(&mut rng) {
+            match mutex_guard.get_url() {
                 Some(url) => url,
                 None => {println!("Error: {:?}", "reservoir is empty");continue;},
             }
@@ -193,7 +191,7 @@ pub fn worker(mut css_sender: sync::mpsc::Sender<String>, bloom_filter: sync::Ar
                 Err(e) => {println!("Error: {:?}", e);break;},
             };
 
-            mutex_guard.add_urls(urls, &mut rng);
+            mutex_guard.add_urls(urls);
         }
     }
 

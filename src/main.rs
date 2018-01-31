@@ -31,7 +31,7 @@ fn contains_only_allowed_chars(s: &String) -> bool{
 fn main() {
     let (css_sender, css_receiver) = sync::mpsc::channel::<String>();
     let bloom_filter=sync::Arc::new(sync::Mutex::new(bloom_filter::LargeBloomFilter::new(vec![0xb77c92ec, 0x660208ac])));
-    let url_reservoir=sync::Arc::new(sync::Mutex::new(url_reservoir::UrlReservoir::new(vec!["http://cssdb.co".to_string()]))); // , "http://www.rust-lang.org".to_string(), "http://github.com".to_string(), "http://wikipedia.com".to_string()
+    let url_reservoir=sync::Arc::new(sync::Mutex::new(url_reservoir::UrlReservoir::new(vec!["http://cssdb.co".to_string()], rand::StdRng::new().unwrap()))); // , "http://www.rust-lang.org".to_string(), "http://github.com".to_string(), "http://wikipedia.com".to_string()
     let urls_crawled=sync::Arc::new(sync::atomic::AtomicUsize::new(0));
 
     for _ in 0..NUM_THREADS{

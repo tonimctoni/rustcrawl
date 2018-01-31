@@ -47,6 +47,8 @@ Also, the reservoir of urls to be crawled is finite. If full, inserts remove ran
 
  - Make sure stuff works with only one thread too. So far so good.
 
+ - Remove #![allow(dead_code)].
+
 # new plan for using hyper
 
  - HTML processing thread:

@@ -1,3 +1,6 @@
+#![feature(drain_filter)]
+#![feature(box_syntax)]
+
 extern crate rand;
 extern crate url;
 extern crate reqwest;
@@ -10,6 +13,8 @@ mod murmur;
 mod bloom_filter;
 mod crawl_worker;
 mod url_reservoir;
+mod css_worker;
+mod html_worker;
 
 
 const NUM_THREADS: usize = 100;

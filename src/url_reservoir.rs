@@ -55,6 +55,30 @@ impl UrlReservoir {
         assert!(self.urls.capacity()==RESERVOIR_SIZE);
     }
 
+    /// Adds strings to the UrlReservoir structure, removing already contained
+    /// strings if it is already full. In contrast to add_urls, it does not consume
+    /// the vector itself, but only its contents.
+    ///
+    /// # Arguments
+    ///
+    /// * `urls` - vector of strings to add to the UrlReservoir structure.
+    pub fn add_urls_popping(&mut self, urls: &mut Vec<String>){
+        loop {
+            match urls.pop() {
+                Some(url) => {
+                    if self.urls.len()<self.urls.capacity(){
+                        self.urls.push(url);
+                    } else{
+                        let len=self.urls.len();
+                        self.urls[(self.rng.next_u64()%(len as u64)) as usize]=url;
+                    }
+                },
+                None => break,
+            }
+        }
+        assert!(self.urls.capacity()==RESERVOIR_SIZE);
+    }
+
     /// Retrieves a random one of the contained strings, or None if the UrlReservoir
     /// structure is empty.
     pub fn get_url(&mut self) -> Option<String>{
@@ -75,18 +99,34 @@ mod tests {
 
     #[test]
     fn test_url_reservoir() {
-        let mut url_reservoir=UrlReservoir::new(vec!["hello".to_string()], rand::StdRng::new().unwrap());
+        let mut url_reservoir=UrlReservoir::new(vec!["hello".into()], rand::StdRng::new().unwrap());
         assert_eq!(url_reservoir.available_space(), RESERVOIR_SIZE-1);
-        assert_eq!(url_reservoir.get_url(), Some("hello".to_string()));
+        assert_eq!(url_reservoir.get_url(), Some("hello".into()));
         assert_eq!(url_reservoir.available_space(), RESERVOIR_SIZE);
 
-        url_reservoir.add_urls(vec!["1".to_string(), "1".to_string()]);
+        url_reservoir.add_urls(vec!["1".into(), "1".into()]);
         assert_eq!(url_reservoir.available_space(), RESERVOIR_SIZE-2);
-        assert_eq!(url_reservoir.get_url(), Some("1".to_string()));
+        assert_eq!(url_reservoir.get_url(), Some("1".into()));
         assert_eq!(url_reservoir.available_space(), RESERVOIR_SIZE-1);
-        assert_eq!(url_reservoir.get_url(), Some("1".to_string()));
+        assert_eq!(url_reservoir.get_url(), Some("1".into()));
         assert_eq!(url_reservoir.available_space(), RESERVOIR_SIZE);
         assert_eq!(url_reservoir.get_url(), None);
         assert_eq!(url_reservoir.available_space(), RESERVOIR_SIZE);
+
+        let mut v:Vec<String>=vec!["2".into(), "2".into(), "2".into()];
+        url_reservoir.add_urls_popping(&mut v);
+        assert_eq!(v.len(), 0);
+        assert_eq!(url_reservoir.available_space(), RESERVOIR_SIZE-3);
+        assert_eq!(url_reservoir.get_url(), Some("2".into()));
+        assert_eq!(url_reservoir.get_url(), Some("2".into()));
+        assert_eq!(url_reservoir.get_url(), Some("2".into()));
+        assert_eq!(url_reservoir.get_url(), None);
+        assert_eq!(url_reservoir.get_url(), None);
+        assert_eq!(url_reservoir.get_url(), None);
+        assert_eq!(url_reservoir.get_url(), None);
+
+        let v:Vec<String>=(0..(RESERVOIR_SIZE+5)).map(|_| "hello".into()).collect();
+        url_reservoir.add_urls(v);
+        assert_eq!(url_reservoir.available_space(), 0);
     }
 }

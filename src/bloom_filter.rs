@@ -20,7 +20,7 @@ impl BloomFilter {
     /// * `seeds` - seeds to be used for hashing. More seeds yield less collissions.
     pub fn new(seeds: Vec<u32>) -> BloomFilter {
         BloomFilter{
-            bitarray: Box::new([0u8;ARRAY_SIZE]), // use box syntax as soon as there is an updated compiler (lazy admin is lazy)
+            bitarray: box [0u8;ARRAY_SIZE], // use box syntax as soon as there is an updated compiler (lazy admin is lazy)
             seeds: seeds,
         }
     }
@@ -79,7 +79,7 @@ const LARGE_ARRAY_SIZE: usize = 536870912;
 /// This is a larger version of BloomFilter, which occupies 512 MB of memory.
 #[derive(Clone)]
 pub struct LargeBloomFilter{
-    bitarray: Vec<u8>, // use box of array as soon as box syntax is here (lazy adming is lazy, again)
+    bitarray: Box<[u8;LARGE_ARRAY_SIZE]>, // use box of array as soon as box syntax is here (lazy adming is lazy, again)
     seeds: Vec<u32>,
 }
 
@@ -90,10 +90,8 @@ impl LargeBloomFilter {
     ///
     /// * `seeds` - seeds to be used for hashing. More seeds yield less collissions.
     pub fn new(seeds: Vec<u32>) -> LargeBloomFilter {
-        let mut vector=Vec::new();
-        vector.resize(LARGE_ARRAY_SIZE, 0);
         LargeBloomFilter{
-            bitarray: vector,
+            bitarray: box [0u8;LARGE_ARRAY_SIZE],
             seeds: seeds,
         }
     }

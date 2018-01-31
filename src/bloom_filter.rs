@@ -6,28 +6,26 @@ const ARRAY_SIZE: usize = 8192;
 
 /// Data structure that elements can be added to, such that when shown a new element,
 /// it can decide if it has been added. Here, added means its hash stays saved.
-/// It uses a bloom filter to this end.
 #[derive(Clone)]
-pub struct Unique{
-    unique_array: Box<[u8;ARRAY_SIZE]>,
+pub struct BloomFilter{
+    bitarray: Box<[u8;ARRAY_SIZE]>,
     seeds: Vec<u32>,
 }
 
-// Uses bloom filter
-impl Unique {
-    /// Creates and returns a new Unique structure.
+impl BloomFilter {
+    /// Creates and returns a new BloomFilter structure.
     ///
     /// # Arguments
     ///
     /// * `seeds` - seeds to be used for hashing. More seeds yield less collissions.
-    pub fn new(seeds: Vec<u32>) -> Unique {
-        Unique{
-            unique_array: Box::new([0u8;ARRAY_SIZE]), // use box syntax as soon as there is an updated compiler (lazy admin is lazy)
+    pub fn new(seeds: Vec<u32>) -> BloomFilter {
+        BloomFilter{
+            bitarray: Box::new([0u8;ARRAY_SIZE]), // use box syntax as soon as there is an updated compiler (lazy admin is lazy)
             seeds: seeds,
         }
     }
 
-    /// Adds an element to the Unique structure.
+    /// Adds an element to the BloomFilter structure.
     ///
     /// # Arguments
     ///
@@ -36,12 +34,12 @@ impl Unique {
         let seed_pairs=self.seeds.iter().map(|&x| murmur::murmur_hash3_32(item, x)).map(|x| (x>>16,x&0xffff));
 
         for (s1,s2) in seed_pairs{
-            self.unique_array[(s1>>3) as usize]|=1<<((s1&7) as u8);
-            self.unique_array[(s2>>3) as usize]|=1<<((s2&7) as u8);
+            self.bitarray[(s1>>3) as usize]|=1<<((s1&7) as u8);
+            self.bitarray[(s2>>3) as usize]|=1<<((s2&7) as u8);
         }
     }
 
-    /// Checks whether an element was added to the Unique structure.
+    /// Checks whether an element was added to the BloomFilter structure.
     ///
     /// # Arguments
     ///
@@ -49,11 +47,11 @@ impl Unique {
     pub fn contains(&self, item: &[u8]) -> bool{
         let mut seed_pairs=self.seeds.iter().map(|&x| murmur::murmur_hash3_32(item, x)).map(|x| (x>>16,x&0xffff));
 
-        seed_pairs.all(|(s1,s2)| self.unique_array[(s1>>3) as usize]&((1<<(s1&7)) as u8)!=0 && self.unique_array[(s2>>3) as usize]&((1<<(s2&7)) as u8)!=0)
+        seed_pairs.all(|(s1,s2)| self.bitarray[(s1>>3) as usize]&((1<<(s1&7)) as u8)!=0 && self.bitarray[(s2>>3) as usize]&((1<<(s2&7)) as u8)!=0)
     }
 
-    /// Checks whether an element was added to the Unique structure. If it was not,
-    /// it gets added. The result of the check gets returned.
+    /// Checks whether an element was added to the BloomFilter structure. If it
+    /// was not, it gets added. The result of the check gets returned.
     ///
     /// # Arguments
     ///
@@ -63,10 +61,10 @@ impl Unique {
         let mut contains=true;
 
         for (s1,s2) in seed_pairs{
-            if (self.unique_array[(s1>>3) as usize]&((1<<(s1&7)) as u8))|(self.unique_array[(s2>>3) as usize]&((1<<(s2&7)) as u8))==0{
+            if (self.bitarray[(s1>>3) as usize]&((1<<(s1&7)) as u8))|(self.bitarray[(s2>>3) as usize]&((1<<(s2&7)) as u8))==0{
                 contains=false;
-                self.unique_array[(s1>>3) as usize]|=1<<((s1&7) as u8);
-                self.unique_array[(s2>>3) as usize]|=1<<((s2&7) as u8);
+                self.bitarray[(s1>>3) as usize]|=1<<((s1&7) as u8);
+                self.bitarray[(s2>>3) as usize]|=1<<((s2&7) as u8);
             }
         }
 
@@ -78,31 +76,29 @@ const LARGE_ARRAY_SIZE: usize = 536870912;
 
 /// Data structure that elements can be added to, such that when shown a new element,
 /// it can decide if it has been added. Here, added means its hash stays saved.
-/// It uses a bloom filter to this end.
-/// This is a larger version of Unique, which occupies 512 MB of memory.
+/// This is a larger version of BloomFilter, which occupies 512 MB of memory.
 #[derive(Clone)]
-pub struct LargeUnique{
-    unique_array: Vec<u8>, // use box of array as soon as box syntax is here (lazy adming is lazy, again)
+pub struct LargeBloomFilter{
+    bitarray: Vec<u8>, // use box of array as soon as box syntax is here (lazy adming is lazy, again)
     seeds: Vec<u32>,
 }
 
-// Uses bloom filter
-impl LargeUnique {
-    /// Creates and returns a new LargeUnique structure.
+impl LargeBloomFilter {
+    /// Creates and returns a new LargeBloomFilter structure.
     ///
     /// # Arguments
     ///
     /// * `seeds` - seeds to be used for hashing. More seeds yield less collissions.
-    pub fn new(seeds: Vec<u32>) -> LargeUnique {
+    pub fn new(seeds: Vec<u32>) -> LargeBloomFilter {
         let mut vector=Vec::new();
         vector.resize(LARGE_ARRAY_SIZE, 0);
-        LargeUnique{
-            unique_array: vector,
+        LargeBloomFilter{
+            bitarray: vector,
             seeds: seeds,
         }
     }
 
-    /// Adds an element to the LargeUnique structure.
+    /// Adds an element to the LargeBloomFilter structure.
     ///
     /// # Arguments
     ///
@@ -111,14 +107,14 @@ impl LargeUnique {
         let fourwise_hashes=self.seeds.iter().map(|&x| murmur::murmur_hash3_x64_128(item, x)).map(|(x1,x2)| (x1>>32, x1&0xffffffff, x2>>32, x2&0xffffffff));
 
         for (s1,s2,s3,s4) in fourwise_hashes{
-            self.unique_array[(s1>>3) as usize]|=1<<((s1&7) as u8);
-            self.unique_array[(s2>>3) as usize]|=1<<((s2&7) as u8);
-            self.unique_array[(s3>>3) as usize]|=1<<((s3&7) as u8);
-            self.unique_array[(s4>>3) as usize]|=1<<((s4&7) as u8);
+            self.bitarray[(s1>>3) as usize]|=1<<((s1&7) as u8);
+            self.bitarray[(s2>>3) as usize]|=1<<((s2&7) as u8);
+            self.bitarray[(s3>>3) as usize]|=1<<((s3&7) as u8);
+            self.bitarray[(s4>>3) as usize]|=1<<((s4&7) as u8);
         }
     }
 
-    /// Checks whether an element was added to the LargeUnique structure.
+    /// Checks whether an element was added to the LargeBloomFilter structure.
     ///
     /// # Arguments
     ///
@@ -127,14 +123,14 @@ impl LargeUnique {
         let mut fourwise_hashes=self.seeds.iter().map(|&x| murmur::murmur_hash3_x64_128(item, x)).map(|(x1,x2)| (x1>>32, x1&0xffffffff, x2>>32, x2&0xffffffff));
 
         fourwise_hashes.all(|(s1,s2,s3,s4)| 
-            self.unique_array[(s1>>3) as usize]&((1<<(s1&7)) as u8)!=0 &&
-            self.unique_array[(s2>>3) as usize]&((1<<(s2&7)) as u8)!=0 &&
-            self.unique_array[(s3>>3) as usize]&((1<<(s3&7)) as u8)!=0 &&
-            self.unique_array[(s4>>3) as usize]&((1<<(s4&7)) as u8)!=0
+            self.bitarray[(s1>>3) as usize]&((1<<(s1&7)) as u8)!=0 &&
+            self.bitarray[(s2>>3) as usize]&((1<<(s2&7)) as u8)!=0 &&
+            self.bitarray[(s3>>3) as usize]&((1<<(s3&7)) as u8)!=0 &&
+            self.bitarray[(s4>>3) as usize]&((1<<(s4&7)) as u8)!=0
             )
     }
 
-    /// Checks whether an element was added to the LargeUnique structure. If it
+    /// Checks whether an element was added to the LargeBloomFilter structure. If it
     /// was not, it gets added. The result of the check gets returned.
     ///
     /// # Arguments
@@ -145,16 +141,16 @@ impl LargeUnique {
         let mut contains=true;
 
         for (s1,s2,s3,s4) in fourwise_hashes{
-            if  (self.unique_array[(s1>>3) as usize]&((1<<(s1&7)) as u8)) |
-                (self.unique_array[(s2>>3) as usize]&((1<<(s2&7)) as u8)) |
-                (self.unique_array[(s3>>3) as usize]&((1<<(s3&7)) as u8)) |
-                (self.unique_array[(s4>>3) as usize]&((1<<(s4&7)) as u8))==0{
+            if  (self.bitarray[(s1>>3) as usize]&((1<<(s1&7)) as u8)) |
+                (self.bitarray[(s2>>3) as usize]&((1<<(s2&7)) as u8)) |
+                (self.bitarray[(s3>>3) as usize]&((1<<(s3&7)) as u8)) |
+                (self.bitarray[(s4>>3) as usize]&((1<<(s4&7)) as u8))==0{
 
                 contains=false;
-                self.unique_array[(s1>>3) as usize]|=1<<((s1&7) as u8);
-                self.unique_array[(s2>>3) as usize]|=1<<((s2&7) as u8);
-                self.unique_array[(s3>>3) as usize]|=1<<((s3&7) as u8);
-                self.unique_array[(s4>>3) as usize]|=1<<((s4&7) as u8);
+                self.bitarray[(s1>>3) as usize]|=1<<((s1&7) as u8);
+                self.bitarray[(s2>>3) as usize]|=1<<((s2&7) as u8);
+                self.bitarray[(s3>>3) as usize]|=1<<((s3&7) as u8);
+                self.bitarray[(s4>>3) as usize]|=1<<((s4&7) as u8);
             }
         }
 
@@ -169,8 +165,8 @@ mod tests {
     use std::str;
 
     #[test]
-    fn test_unique() {
-        let mut unique=Unique::new(vec![0xa4a759a4, 0xe5f20661, 0x85684b56, 0xba444a10]);
+    fn test_bloom_filter() {
+        let mut bloom_filter=BloomFilter::new(vec![0xa4a759a4, 0xe5f20661, 0x85684b56, 0xba444a10]);
 
         let to_add=[b"1" as &[u8], b"hello" as &[u8], b"NaN" as &[u8], b"" as &[u8], b"ohle" as &[u8], b"some rather long string just because. And just in case, lets make it even longer :D" as &[u8]];
         let not_to_add=[b"0" as &[u8], b"bye" as &[u8], b"ehlo" as &[u8], b"lello" as &[u8], b"_" as &[u8], b"another rather long string just because. And just in case, lets make it even longer :D" as &[u8]];
@@ -178,29 +174,29 @@ mod tests {
 
 
         for s in to_add.iter(){
-            unique.add(s);
+            bloom_filter.add(s);
         }
 
         for s in to_add.iter(){
-            assert!(unique.contains(s), format!("Unique says a word that was added is not contained. ({:?})", str::from_utf8(s)));
+            assert!(bloom_filter.contains(s), format!("BloomFilter says a word that was added is not contained. ({:?})", str::from_utf8(s)));
         }
 
         for s in not_to_add.iter(){
-            assert!(!unique.contains(s), format!("Unique says a word that was not added is contained. ({:?})", str::from_utf8(s)));
+            assert!(!bloom_filter.contains(s), format!("BloomFilter says a word that was not added is contained. ({:?})", str::from_utf8(s)));
         }
 
         for s in to_add_later.iter(){
-            assert!(unique.contains_add(s)==false, format!("Unique says a word that was not added is contained (contains_add). ({:?})", str::from_utf8(s)));
+            assert!(bloom_filter.contains_add(s)==false, format!("BloomFilter says a word that was not added is contained (contains_add). ({:?})", str::from_utf8(s)));
         }
 
         for s in to_add_later.iter(){
-            assert!(unique.contains_add(s)==true, format!("Unique says a word that was added is not contained (contains_add). ({:?})", str::from_utf8(s)));
+            assert!(bloom_filter.contains_add(s)==true, format!("BloomFilter says a word that was added is not contained (contains_add). ({:?})", str::from_utf8(s)));
         }
     }
 
     #[test]
-    fn test_large_unique() {
-        let mut unique=LargeUnique::new(vec![0xa4a759a4, 0xe5f20661]);
+    fn test_large_bloom_filter() {
+        let mut bloom_filter=LargeBloomFilter::new(vec![0xa4a759a4, 0xe5f20661]);
 
         let to_add=[b"1" as &[u8], b"hello" as &[u8], b"NaN" as &[u8], b"" as &[u8], b"ohle" as &[u8], b"some rather long string just because. And just in case, lets make it even longer :D" as &[u8]];
         let not_to_add=[b"0" as &[u8], b"bye" as &[u8], b"ehlo" as &[u8], b"lello" as &[u8], b"_" as &[u8], b"another rather long string just because. And just in case, lets make it even longer :D" as &[u8]];
@@ -208,23 +204,23 @@ mod tests {
 
 
         for s in to_add.iter(){
-            unique.add(s);
+            bloom_filter.add(s);
         }
 
         for s in to_add.iter(){
-            assert!(unique.contains(s), format!("Unique says a word that was added is not contained. ({:?})", str::from_utf8(s)));
+            assert!(bloom_filter.contains(s), format!("LargeBloomFilter says a word that was added is not contained. ({:?})", str::from_utf8(s)));
         }
 
         for s in not_to_add.iter(){
-            assert!(!unique.contains(s), format!("Unique says a word that was not added is contained. ({:?})", str::from_utf8(s)));
+            assert!(!bloom_filter.contains(s), format!("LargeBloomFilter says a word that was not added is contained. ({:?})", str::from_utf8(s)));
         }
 
         for s in to_add_later.iter(){
-            assert!(unique.contains_add(s)==false, format!("Unique says a word that was not added is contained (contains_add). ({:?})", str::from_utf8(s)));
+            assert!(bloom_filter.contains_add(s)==false, format!("LargeBloomFilter says a word that was not added is contained (contains_add). ({:?})", str::from_utf8(s)));
         }
 
         for s in to_add_later.iter(){
-            assert!(unique.contains_add(s)==true, format!("Unique says a word that was added is not contained (contains_add). ({:?})", str::from_utf8(s)));
+            assert!(bloom_filter.contains_add(s)==true, format!("LargeBloomFilter says a word that was added is not contained (contains_add). ({:?})", str::from_utf8(s)));
         }
     }
 }

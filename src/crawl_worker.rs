@@ -3,7 +3,7 @@ use url;
 use reqwest;
 use regex;
 use std::sync;
-use unique;
+use bloom_filter;
 use url_reservoir;
 use rand;
 use thread;
@@ -110,17 +110,18 @@ fn get_urls_send_css(url: url::Url, client: &reqwest::Client, re: &regex::Regex,
 }
 
 /// Within an endless loop, it obtains an url from the `url_reservoir` and crawls
-/// it with `get_urls_send_css`. Found urls are added to `url_reservoir` and `unique`
-/// if not contained in `unique`. If css text is found, it is sent via the `css_sender`
-/// channel. After successfully crawling the `url`, `urls_crawled` is incremented.
+/// it with `get_urls_send_css`. Found urls are added to `url_reservoir` and `bloom_filter`
+/// if not contained in `bloom_filter`. If css text is found, it is sent via the
+/// `css_sender` channel. After successfully crawling the `url`, `urls_crawled` is
+/// incremented.
 ///
 /// # Arguments
 ///
 /// * `css_sender` - Sender channel to send css text through when found.
-/// * `unique` - Unique structure that helps avoiding crawling the same url several times.
+/// * `bloom_filter` - LargeBloomFilter structure that helps avoiding crawling the same url several times.
 /// * `url_reservoir` - UrlReservoir structure to get urls from and add urls to.
 /// * `urls_crawled` - Atomic counter that keeps track of the ammount of urls crawled.
-pub fn worker(mut css_sender: sync::mpsc::Sender<String>, unique: sync::Arc<sync::Mutex<unique::LargeUnique>>, url_reservoir: sync::Arc<sync::Mutex<url_reservoir::UrlReservoir>>, urls_crawled: sync::Arc<sync::atomic::AtomicUsize>){
+pub fn worker(mut css_sender: sync::mpsc::Sender<String>, bloom_filter: sync::Arc<sync::Mutex<bloom_filter::LargeBloomFilter>>, url_reservoir: sync::Arc<sync::Mutex<url_reservoir::UrlReservoir>>, urls_crawled: sync::Arc<sync::atomic::AtomicUsize>){
     let client=reqwest::Client::new();
     let re=regex::Regex::new("(?:href=|src=|url=)[\"']?([^\"' <>]*)").unwrap();
     let mut rng=rand::thread_rng();
@@ -142,9 +143,9 @@ pub fn worker(mut css_sender: sync::mpsc::Sender<String>, unique: sync::Arc<sync
             }
         };
 
-        // Check if url has been crawled already. If not, add to unique and go on. If yes, continue.
+        // Check if url has been crawled already. If not, add to bloom_filter and go on. If yes, continue.
         let url_has_been_used={
-            let mut mutex_guard=match unique.lock() {
+            let mut mutex_guard=match bloom_filter.lock() {
                 Ok(mutex_guard) => mutex_guard,
                 Err(e) => {println!("Error: {:?}", e);break;},
             };
@@ -177,7 +178,7 @@ pub fn worker(mut css_sender: sync::mpsc::Sender<String>, unique: sync::Arc<sync
 
         // Filter out urls that have already been crawled.
         let urls={
-            let mutex_guard=match unique.lock() {
+            let mutex_guard=match bloom_filter.lock() {
                 Ok(mutex_guard) => mutex_guard,
                 Err(e) => {println!("Error: {:?}", e);break;},
             };

@@ -40,3 +40,20 @@ Also, the reservoir of urls to be crawled is finite. If full, inserts remove ran
  - Use box syntax in unique module.
 
  - Test further by using.
+
+ - Maybe use hyper, reqwest feels clunky.
+
+ - Make sure stuff works with only one thread too. So far so good.
+
+# new plan for using hyper
+
+ - HTML processing thread:
+    - get html from channel, grab urls, and throw those that are not within bloomfilter into reservoir.
+    - if too slow: make several such threads.
+
+ - CSS processing thread:
+    - get css from channel, make nice, and if not within bloomfilter write to file.
+
+ - Main IO loop thread:
+    - grab lock for bloomfilter and urlreservoir, and get urls until reservoir is empty or I have gotten enougth.
+    - get gotten urls asynchronous, send css through css channel and html through html channel.

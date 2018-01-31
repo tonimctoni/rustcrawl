@@ -7,7 +7,7 @@ use std::sync;
 use std::fs;
 use std::io::Write;
 mod murmur;
-mod unique;
+mod bloom_filter;
 mod crawl_worker;
 mod url_reservoir;
 
@@ -30,29 +30,28 @@ fn contains_only_allowed_chars(s: &String) -> bool{
 
 fn main() {
     let (css_sender, css_receiver) = sync::mpsc::channel::<String>();
-    let unique=sync::Arc::new(sync::Mutex::new(unique::LargeUnique::new(vec![0xb77c92ec, 0x660208ac])));
+    let bloom_filter=sync::Arc::new(sync::Mutex::new(bloom_filter::LargeBloomFilter::new(vec![0xb77c92ec, 0x660208ac])));
     let url_reservoir=sync::Arc::new(sync::Mutex::new(url_reservoir::UrlReservoir::new(vec!["http://cssdb.co".to_string()]))); // , "http://www.rust-lang.org".to_string(), "http://github.com".to_string(), "http://wikipedia.com".to_string()
     let urls_crawled=sync::Arc::new(sync::atomic::AtomicUsize::new(0));
 
     for _ in 0..NUM_THREADS{
         let css_sender=css_sender.clone();
-        let unique=unique.clone();
+        let bloom_filter=bloom_filter.clone();
         let url_reservoir=url_reservoir.clone();
         let urls_crawled=urls_crawled.clone();
         let _ = thread::spawn(move || {
-            crawl_worker::worker(css_sender, unique, url_reservoir, urls_crawled);
+            crawl_worker::worker(css_sender, bloom_filter, url_reservoir, urls_crawled);
         });
     }
 
-    let mut unique=unique::LargeUnique::new(vec![0x5a14a940, 0xa87239b4]);
+    let mut bloom_filter=bloom_filter::LargeBloomFilter::new(vec![0x5a14a940, 0xa87239b4]);
     let re_comments=regex::Regex::new(r"/\*(.|\n)*?\*/").unwrap();
     let re_breaklines=regex::Regex::new(r"\n{3,}").unwrap();
     let newline_char=std::char::from_u32(10).unwrap();
 
     let mut css_found:usize=0;
     let mut css_written:usize=0;
-    for css_content in css_receiver.iter(){
-        let mut css_content=css_content;
+    for mut css_content in css_receiver.iter(){
         css_found+=1;
 
         css_content=css_content.to_lowercase();
@@ -71,7 +70,7 @@ fn main() {
             continue;
         }
 
-        if unique.contains_add(css_content.as_bytes()){
+        if bloom_filter.contains_add(css_content.as_bytes()){
             println!("Error: {:?}", "css was already gathered");
             continue;
         }

@@ -1,136 +1,219 @@
-#![feature(drain_filter)]
+// #![feature(drain_filter)]
 #![feature(box_syntax)]
 
 extern crate rand;
 extern crate url;
-extern crate reqwest;
 extern crate regex;
+extern crate futures;
+extern crate hyper;
+extern crate tokio_core;
+use futures::Future;
+use futures::stream::Stream;
 use std::thread;
 use std::sync;
-use std::fs;
-use std::io::Write;
+use std::time;
+// use std::fs;
+// use std::io::Write;
 mod murmur;
 mod bloom_filter;
-mod crawl_worker;
+// mod crawl_worker;
 mod url_reservoir;
 mod css_worker;
 mod html_worker;
 
-
-const NUM_THREADS: usize = 100;
-const ALLOWED_CHARS: &str = "abcdefghijklmnopqrstuvwxzy0123456789\n\t\r \"'(){}[]+-*/.,:;_@#%$!?=\\<>~^|&`";
-
-
-/// Checks wether the input string `s` contains only allowed characters.
-///
-/// # Arguments
-///
-/// * `s` - String to be checked.
-///
-fn contains_only_allowed_chars(s: &String) -> bool{
-    s
-    .chars()
-    .all(|c| ALLOWED_CHARS.chars().any(|ca| ca==c))
-}
-
+// https://tokio.rs/docs/getting-started/streams-and-sinks/
 fn main() {
     let (css_sender, css_receiver) = sync::mpsc::channel::<String>();
-    let bloom_filter=sync::Arc::new(sync::Mutex::new(bloom_filter::LargeBloomFilter::new(vec![0xb77c92ec, 0x660208ac])));
-    let url_reservoir=sync::Arc::new(sync::Mutex::new(url_reservoir::UrlReservoir::new(vec!["http://cssdb.co".to_string()], rand::StdRng::new().unwrap()))); // , "http://www.rust-lang.org".to_string(), "http://github.com".to_string(), "http://wikipedia.com".to_string()
-    let urls_crawled=sync::Arc::new(sync::atomic::AtomicUsize::new(0));
+    let (html_sender, html_receiver) = sync::mpsc::channel::<(String,String)>();
+    let css_written=sync::Arc::new(sync::atomic::AtomicUsize::new(0));
+    let htmls_crawled=sync::Arc::new(sync::atomic::AtomicUsize::new(0));
 
-    for _ in 0..NUM_THREADS{
-        let css_sender=css_sender.clone();
-        let bloom_filter=bloom_filter.clone();
-        let url_reservoir=url_reservoir.clone();
-        let urls_crawled=urls_crawled.clone();
-        let _ = thread::spawn(move || {
-            crawl_worker::worker(css_sender, bloom_filter, url_reservoir, urls_crawled);
+    let bloom_filter=sync::Arc::new(sync::Mutex::new(bloom_filter::LargeBloomFilter::new(vec![0xb77c92ec, 0x660208ac])));
+    let url_reservoir=sync::Arc::new(sync::Mutex::new(url_reservoir::UrlReservoir::new(vec!["http://cssdb.co".to_string()], rand::StdRng::new().unwrap())));
+
+    let (uri_sink, uri_stream)=futures::sync::mpsc::channel::<hyper::Uri>(1024);
+
+    {
+        // let css_written=css_written.clone();
+        // thread::spawn(move || {
+        //     css_worker::css_worker(css_receiver, css_written);
+        // });
+
+        let htmls_crawled=htmls_crawled.clone();
+        let bloom_filter_c=bloom_filter.clone();
+        let url_reservoir_c=url_reservoir.clone();
+        thread::spawn(move || {
+            html_worker::html_worker(html_receiver, htmls_crawled, bloom_filter_c, url_reservoir_c);
+        });
+
+        thread::spawn(move || {
+            let mut uri_sink=uri_sink;
+            let sleep_duration_per_loop=time::Duration::from_secs(2);
+            loop{
+                let url={
+                    let mut mutex_guard=match url_reservoir.lock() {
+                        Ok(mutex_guard) => mutex_guard,
+                        Err(e) => {println!("Error: {:?}", e);break;},
+                    };
+
+                    match mutex_guard.get_url() {
+                        Some(url) => url,
+                        None => {println!("Error: {:?}", "reservoir is empty");continue;},
+                    }
+                };
+
+                let url_has_been_used={
+                    let mut mutex_guard=match bloom_filter.lock() {
+                        Ok(mutex_guard) => mutex_guard,
+                        Err(e) => {println!("Error: {:?}", e);break;},
+                    };
+
+                    mutex_guard.contains_add(url.as_bytes())
+                };
+                if url_has_been_used{
+                    println!("Error: {:?}", "url_has_been_used");
+                    continue;
+                }
+
+                let uri=match url.parse::<hyper::Uri>() {
+                    Ok(uri) => uri,
+                    Err(e) => {println!("Error: {:?}", e);continue;},
+                };
+
+                match uri_sink.try_send(uri) {
+                    Ok(_) => {},
+                    Err(e) => {println!("Error: {:?}", e);continue;},
+                }
+
+                thread::sleep(sleep_duration_per_loop);
+            }
         });
     }
 
-    let mut bloom_filter=bloom_filter::LargeBloomFilter::new(vec![0x5a14a940, 0xa87239b4]);
-    let re_comments=regex::Regex::new(r"/\*(.|\n)*?\*/").unwrap();
-    let re_breaklines=regex::Regex::new(r"\n{3,}").unwrap();
-    let newline_char=std::char::from_u32(10).unwrap();
+    let mut core = tokio_core::reactor::Core::new().unwrap();
+    let handle = core.handle();
+    let client = hyper::Client::new(&handle);
 
-    let mut css_found:usize=0;
-    let mut css_written:usize=0;
-    for mut css_content in css_receiver.iter(){
-        css_found+=1;
+    enum ContentType {
+        Html,
+        Css,
+        Other,
+    }
 
-        css_content=css_content.to_lowercase();
-        if !contains_only_allowed_chars(&css_content){
-            continue;
-        }
-
-        css_content=String::from(re_comments.replace_all(css_content.as_str(), ""));
-        css_content=String::from(re_breaklines.replace_all(css_content.as_str(), "\n\n"));
-        css_content=css_content.trim().to_string();
-        if css_content.len()<=50{
-            continue;
-        }
-
-        if css_content.chars().filter(|&c| c==newline_char).count()<5{
-            continue;
-        }
-
-        if bloom_filter.contains_add(css_content.as_bytes()){
-            println!("Error: {:?}", "css was already gathered");
-            continue;
-        }
-
-        let mut f=match fs::File::create(format!("css/css{:06}.css", css_written)) {
-            Ok(f) => f,
-            Err(e) => {println!("Error: {:?}", e);continue;},
-        };
-
-        match f.write_all(css_content.as_bytes()) {
-            Ok(_) => (),
-            Err(e) => {println!("Error: {:?}", e);continue;},
-        }
-
-        css_written+=1;
-        let reservoir_available_space={
-            let mutex_guard=match url_reservoir.lock() {
-                Ok(mutex_guard) => mutex_guard,
-                Err(e) => {println!("Error: {:?}", e);break;},
+    let work=uri_stream.and_then(|uri| {
+        let uri_string=uri.to_string();
+        client.get(uri)
+        .map_err(|e| println!("Error: {:?}", e))
+        .and_then(|res|{
+            let content_type=match res.headers().get::<hyper::header::ContentType>(){
+                Some(content_type) => {
+                    let mimetype=(content_type.type_(), content_type.subtype());
+                    if mimetype.0=="text" && mimetype.1=="html"{
+                        ContentType::Html
+                    } else if mimetype.0=="text" && mimetype.1=="css"{
+                        ContentType::Css
+                    } else{
+                        ContentType::Other
+                    }
+                },
+                None => ContentType::Other,
             };
-            mutex_guard.available_space()
-        };
 
-        let mut f=match fs::OpenOptions::new().append(true).create(true).open("csslog.txt") {
-            Ok(f) => f,
-            Err(e) => {println!("Error: {:?}", e);continue;},
-        };
+            res.body().concat2()
+            .map_err(|e| println!("Error: {:?}", e))
+            .and_then(|chunks| {
+                match String::from_utf8(chunks.to_vec()) {
+                    Err(e) => println!("Error: {:?}", e),
+                    Ok(content) => {
+                        match html_sender.send((uri_string, content)) {
+                            Err(e) => println!("Error: {:?}", e),
+                            _ => {},
+                        }
+                    },
+                }
 
-        match f.write_all(format!("[report] Urls urls_crawled: {:?}, Css found: {:?}, Css written: {:?}, Reservoir available space: {:?}\n", urls_crawled.load(sync::atomic::Ordering::Relaxed), css_found, css_written, reservoir_available_space).as_bytes()) {
-            Ok(_) => (),
-            Err(e) => {println!("Error: {:?}", e);continue;},
-        }
-        println!("[report] Urls urls_crawled: {:?}, Css found: {:?}, Css written: {:?}, Reservoir available space: {:?}", urls_crawled.load(sync::atomic::Ordering::Relaxed), css_found, css_written, reservoir_available_space);
-    }
+                Ok(())
+            })
+        })
+    }).for_each(|_|{
+        Ok(())
+    });
 
-    println!("Crawler exited (somehow).");
+    core.run(work).unwrap();
+
+    // match res.headers().get::<hyper::header::ContentType>() {
+    //     Some(expr) => expr,
+    //     None => expr,
+    // }
+
+    // let mut urls=Vec::with_capacity(MAX_URLS_PER_BATCH);
+    // // let mut works=Vec::with_capacity(MAX_URLS_PER_BATCH);
+    // loop {
+    //     urls.clear();
+    //     // works.clear();
+    //     {
+    //         let mut guarded_url_reservoir=match url_reservoir.lock() {
+    //             Ok(guarded_url_reservoir) => guarded_url_reservoir,
+    //             Err(e) => {println!("Error: {:?}", e);break;},
+    //         };
+
+    //         let mut guarded_bloom_filter=match bloom_filter.lock() {
+    //             Ok(guarded_bloom_filter) => guarded_bloom_filter,
+    //             Err(e) => {println!("Error: {:?}", e);break;},
+    //         };
+
+    //         while urls.len()<MAX_URLS_PER_BATCH{
+    //             let url=match guarded_url_reservoir.get_url() {
+    //                 Some(url) => url,
+    //                 None => break,
+    //             };
+
+    //             if !guarded_bloom_filter.contains_add(url.as_bytes()){
+    //                 urls.push(url);
+    //             }
+    //         }
+    //     }
+
+    //     let url=match urls.pop() {
+    //         Some(expr) => expr,
+    //         None => {println!("Error: {:?}", "reservoir is empty");continue;},
+    //     };
+
+    //     let uri=match url.parse::<hyper::Uri>() {
+    //         Ok(expr) => expr,
+    //         Err(e) => {println!("Error: {:?}", e);continue;}, //Not ideal, but a hassle to do right. Max urls lost is MAX_URLS_PER_BATCH-1, so not a problem. Goto would actually be nice and elegant here.
+    //     };
+
+    //     let work=client.get(uri).and_then(|res|{
+    //         res.body().concat2()
+    //     });
+
+    // }
+
+
+
+
+
+
+
+
+    println!("IO loop terminated.");
+
+
+
+
+
+    // let url="http://httpbin.org/ip".to_string();
+
+    // let work = client.get(url.parse::<hyper::Uri>().unwrap()).and_then(|res| {
+    //     println!("Response: {}", url);
+    //     println!("Response: {}", res.status());
+    //     println!("Headers: \n{}", res.headers());
+
+    //     res.body().concat2().map(|a| println!("{:?}", a))
+    // });
+
+    // let a=core.run(work).unwrap();
+    // println!("{:?}", std::str::from_utf8(a.as_ref()));
 }
 
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_contains_only_allowed_chars() {
-        assert!(contains_only_allowed_chars(&"hello".to_string()));
-        assert!(contains_only_allowed_chars(&"hello123".to_string()));
-        assert!(contains_only_allowed_chars(&"hello world !".to_string()));
-        assert!(contains_only_allowed_chars(&"fn a() -> bool {return true;}".to_string()));
-        assert!(contains_only_allowed_chars(&"0123456789,.-;:_[]@#! ?\"\n\t\r".to_string()));
-
-        assert!(!contains_only_allowed_chars(&"Hello".to_string()));
-        assert!(!contains_only_allowed_chars(&"helloª".to_string()));
-        assert!(!contains_only_allowed_chars(&"hello¨".to_string()));
-        assert!(!contains_only_allowed_chars(&"helloÇ".to_string()));
-        assert!(!contains_only_allowed_chars(&"ASD".to_string()));
-    }
-}

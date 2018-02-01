@@ -44,7 +44,7 @@ pub fn html_worker(html_receiver: sync::mpsc::Receiver<(String,String)>, htmls_c
                 Err(e) => {println!("Error: {:?}", e);break;},
             };
 
-            urls.drain_filter(|u| mutex_guard.contains(u.as_bytes()));
+            urls.retain(|u| !mutex_guard.contains(u.as_bytes()));
         };
 
         // Add obtained urls to reservoir.

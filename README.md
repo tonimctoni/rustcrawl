@@ -10,7 +10,7 @@ Also, the reservoir of urls to be crawled is finite. If full, inserts remove ran
 
  - Storing strings instead of urls makes it more space efficient, but less time efficient (worth it).
 
- <!-- - If all threads use tha same seed (which I dont know if they would) that is not a problem, as long as statistical properties for each individual thread are ok. -->
+ <!-- - If all threads use the same seed (which I dont know if they would) that is not a problem, as long as statistical properties for each individual thread are ok. -->
 
  - Relaxed ordering for counters should be enought. Maybe ask someone who knows though. Then again, who knows.
 
@@ -38,6 +38,7 @@ Also, the reservoir of urls to be crawled is finite. If full, inserts remove ran
  <!-- - Use atomic counter to count gathered and visited pages. Maybe log this every so often. Also count css files. -->
 
  - Document everything (as in, write comments and use rustdoc).
+    - Also comment within functions.
 
  - Use box syntax in unique module.
 
@@ -48,6 +49,8 @@ Also, the reservoir of urls to be crawled is finite. If full, inserts remove ran
  - Make sure stuff works with only one thread too. So far so good.
 
  - Remove #![allow(dead_code)].
+
+ - Maybe use buffer_unordered.
 
 # new plan for using hyper
 

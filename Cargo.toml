@@ -6,5 +6,7 @@ authors = ["a.bozzanoschwedhel"]
 [dependencies]
 rand = "*"
 url = "*"
-reqwest = "*"
 regex = "*"
+hyper = "*"
+futures = "*"
+tokio-core = "*"

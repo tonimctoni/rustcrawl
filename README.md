@@ -52,6 +52,13 @@ Also, the reservoir of urls to be crawled is finite. If full, inserts remove ran
 
  - Maybe use buffer_unordered.
 
+ - Maybe send uri to html_worker instead of string, if a move over channel is possible.
+
+ - Maybe use regex over Vec<u8> instead of string too (or not, its a move transform).
+
+ - Maybe a direct transformation uri->url is possible, look into that.
+
+
 # new plan for using hyper
 
  - HTML processing thread:

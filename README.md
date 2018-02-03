@@ -58,6 +58,12 @@ Also, the reservoir of urls to be crawled is finite. If full, inserts remove ran
 
  - Maybe a direct transformation uri->url is possible, look into that.
 
+ - Probably need some sort of timeout.
+
+ - Add timestampt to report. Maybe start timer when program starts and report on timer.
+
+ - Replace unwraps with expects.
+
 
 # new plan for using hyper
 

@@ -9,11 +9,13 @@ use std::time;
 const SLEEP_MILLIS_PER_ITER: u64 = 100;
 const SLEEP_MILLIS_ON_EMPTY_RESERVOIR: u64 = 2000;
 const SLEEP_MILLIS_ON_FULL_CHANNEL: u64 = 10000;
+const SLEEP_MILLIS_ON_PEEK_FULL_CHANNEL: u64 = 0;
 
 pub fn url_enqueuer(mut uri_sink: futures::sync::mpsc::Sender<hyper::Uri>, urls_enqueued: sync::Arc<sync::atomic::AtomicUsize>, bloom_filter: sync::Arc<sync::Mutex<bloom_filter::LargeBloomFilter>>, url_reservoir: sync::Arc<sync::Mutex<url_reservoir::UrlReservoir>>){
     let sleep_duration_per_iter=time::Duration::from_millis(SLEEP_MILLIS_PER_ITER);
     let sleep_duration_on_empty_reservoir=time::Duration::from_millis(SLEEP_MILLIS_ON_EMPTY_RESERVOIR);
     let sleep_duration_on_full_channel=time::Duration::from_millis(SLEEP_MILLIS_ON_FULL_CHANNEL);
+    let sleep_duration_on_peek_full_channel=time::Duration::from_millis(SLEEP_MILLIS_ON_PEEK_FULL_CHANNEL);
 
     loop{
         // let url={
@@ -41,6 +43,14 @@ pub fn url_enqueuer(mut uri_sink: futures::sync::mpsc::Sender<hyper::Uri>, urls_
 
         //     url
         // };
+
+        if SLEEP_MILLIS_ON_PEEK_FULL_CHANNEL!=0{
+            match uri_sink.poll_ready() {
+                Ok(_) => {},
+                Err(e) => {println!("Error (url_enqueuer): {:?}", e);thread::sleep(sleep_duration_on_peek_full_channel);continue;},
+            }
+        }
+
         let maybe_url={
             let mut mutex_guard=match url_reservoir.lock() {
                 Ok(mutex_guard) => mutex_guard,
@@ -79,7 +89,9 @@ pub fn url_enqueuer(mut uri_sink: futures::sync::mpsc::Sender<hyper::Uri>, urls_
         }
 
         urls_enqueued.fetch_add(1, sync::atomic::Ordering::Relaxed);
-        thread::sleep(sleep_duration_per_iter);
+        if SLEEP_MILLIS_PER_ITER!=0{
+            thread::sleep(sleep_duration_per_iter);
+        }
     }
     println!("Url enqueuer terminated.");
 }

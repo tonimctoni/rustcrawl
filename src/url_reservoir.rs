@@ -25,6 +25,11 @@ impl UrlReservoir {
         UrlReservoir{urls: urls, rng: rng}
     }
 
+    /// Returns the ammount of strings contained within the UrlReservoir structure
+    pub fn len(&self) -> usize{
+        self.urls.len()
+    }
+
     /// Returns the ammount of strings that could be added to the UrlReservoir
     /// structure before the strings it already contains start having to be removed.
     pub fn available_space(&self) -> usize{
@@ -52,7 +57,7 @@ impl UrlReservoir {
                 }
             }
         }
-        assert!(self.urls.capacity()==RESERVOIR_SIZE);
+        assert!(self.urls.capacity()==RESERVOIR_SIZE, "UrlReservoir needs fixing: capacity has changed in add_urls");
     }
 
     /// Adds strings to the UrlReservoir structure, removing already contained
@@ -76,7 +81,7 @@ impl UrlReservoir {
                 None => break,
             }
         }
-        assert!(self.urls.capacity()==RESERVOIR_SIZE);
+        assert!(self.urls.capacity()==RESERVOIR_SIZE, "UrlReservoir needs fixing: capacity has changed in add_urls_popping");
     }
 
     /// Retrieves a random one of the contained strings, or None if the UrlReservoir

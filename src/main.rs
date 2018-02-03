@@ -22,7 +22,7 @@ mod css_worker;
 mod html_worker;
 mod url_enqueuer;
 
-const CHANNEL_BUFFER_SIZE: usize = 1024;
+const CHANNEL_BUFFER_SIZE: usize = 1024*10;
 const SLEEP_MILLIS_BETWEEN_REPORTS: u64 = 6000;
 const GET_TIMEOUT_MILLIS: u64 = 5000;
 const REPORT_FILENAME: &str = "report.txt";
@@ -40,12 +40,12 @@ fn main() {
 
     let (uri_sink, uri_stream)=futures::sync::mpsc::channel::<hyper::Uri>(CHANNEL_BUFFER_SIZE);
 
-    // {
-    //     let css_written=css_written.clone();
-    //     thread::spawn(move || {
-    //         css_worker::css_worker(css_receiver, css_written);
-    //     });
-    // }
+    {
+        let css_written=css_written.clone();
+        thread::spawn(move || {
+            css_worker::css_worker(css_receiver, css_written);
+        });
+    }
 
     {
         let htmls_crawled=htmls_crawled.clone();
@@ -65,7 +65,7 @@ fn main() {
     }
 
     {
-        let urls_gotten=htmls_crawled.clone();
+        let urls_gotten=urls_gotten.clone();
         thread::spawn(move || {
             let sleep_duration_per_iter=time::Duration::from_millis(SLEEP_MILLIS_BETWEEN_REPORTS);
             for i in 0.. {
@@ -84,7 +84,7 @@ fn main() {
                     mutex_guard.len()
                 };
 
-                match f.write_all(format!("[report ({})] urls enqueued: {:?}, urls gotten: {:?}, htmls crawled: {:?}, css written: {:?}, reservoir contains: {:?}\n",
+                match f.write_all(format!("[report ({})] urls enqueued: {}, urls gotten: {}, htmls crawled: {}, css written: {}, reservoir contains: {}\n",
                     i,
                     urls_enqueued.load(sync::atomic::Ordering::Relaxed),
                     urls_gotten.load(sync::atomic::Ordering::Relaxed),

@@ -6,9 +6,9 @@ use std::thread;
 use std::sync;
 use std::time;
 
-const SLEEP_MILLIS_PER_ITER: u64 = 100;
+const SLEEP_MILLIS_PER_ITER: u64 = 200;
 const SLEEP_MILLIS_ON_EMPTY_RESERVOIR: u64 = 2000;
-const SLEEP_MILLIS_ON_FULL_CHANNEL: u64 = 10000;
+const SLEEP_MILLIS_ON_FULL_CHANNEL: u64 = 20000;
 const SLEEP_MILLIS_ON_PEEK_FULL_CHANNEL: u64 = 0;
 
 pub fn url_enqueuer(mut uri_sink: futures::sync::mpsc::Sender<hyper::Uri>, urls_enqueued: sync::Arc<sync::atomic::AtomicUsize>, bloom_filter: sync::Arc<sync::Mutex<bloom_filter::LargeBloomFilter>>, url_reservoir: sync::Arc<sync::Mutex<url_reservoir::UrlReservoir>>){

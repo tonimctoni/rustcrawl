@@ -6,7 +6,7 @@ I looked it up, it is called a bloom filter.
 
 Also, the reservoir of urls to be crawled is finite. If full, inserts remove random previous elements, and crawler crawls less urls.
 
-Also, it usis async IO, which is more elegant than a bunch of worker threads. It should scale better too, but this was not tested.
+Also, it uses async IO, which is more elegant than a bunch of worker threads. It should scale better too, but this was not tested.
 
 # notes for myself
 
@@ -14,9 +14,9 @@ Also, it usis async IO, which is more elegant than a bunch of worker threads. It
 
 <!--  - If all threads use the same seed (which I dont know if they would) that is not a problem, as long as statistical properties for each individual thread are ok. -->
 
- - Relaxed ordering for counters should be enought. Maybe ask someone who knows though. Then again, who knows.
+ - Relaxed ordering for counters should be enought. Maybe ask someone who knows though. Then again, who does knows.
 
- - Using modulo to get random values within a range because rust's implementation of ind_sample seems needlessly complicated to me.
+ - Using modulo to get random values within a range because rust's implementation of gen_range seems needlessly complicated to me.
 
 # todo
 
@@ -74,6 +74,12 @@ Also, it usis async IO, which is more elegant than a bunch of worker threads. It
     - Actually, just increase MAX_URLS_PER_SITE to like a thousand. -->
 
  - See if IO loop can be improved for performance.
+
+ - Make sure magic numbers/strings are gone.
+
+ - Make sure url content that is not html or css gets discarded.
+
+<!--  - Add timeout to getting chunks too. -->
 
 <!-- 
 # new plan for using hyper

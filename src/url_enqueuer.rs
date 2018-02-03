@@ -18,32 +18,6 @@ pub fn url_enqueuer(mut uri_sink: futures::sync::mpsc::Sender<hyper::Uri>, urls_
     let sleep_duration_on_peek_full_channel=time::Duration::from_millis(SLEEP_MILLIS_ON_PEEK_FULL_CHANNEL);
 
     loop{
-        // let url={
-        //     let mut guarded_bloom_filter=match bloom_filter.lock() {
-        //         Ok(guarded_bloom_filter) => guarded_bloom_filter,
-        //         Err(e) => {println!("Error (url_enqueuer): {:?}", e);break;},
-        //     };
-
-        //     let mut guarded_url_reservoir=match url_reservoir.lock() {
-        //         Ok(guarded_url_reservoir) => guarded_url_reservoir,
-        //         Err(e) => {println!("Error (url_enqueuer): {:?}", e);break;},
-        //     };
-
-        //     let mut url=match guarded_url_reservoir.get_url() {
-        //         Some(url) => url,
-        //         None => {println!("Error (url_enqueuer): {:?}", "reservoir is empty");continue;},
-        //     };
-
-        //     while !guarded_bloom_filter.contains_add(url.as_bytes()){
-        //         url=match guarded_url_reservoir.get_url() {
-        //             Some(url) => url,
-        //             None => {println!("Error (url_enqueuer): {:?}", "reservoir is empty");continue;},
-        //         };
-        //     }
-
-        //     url
-        // };
-
         if SLEEP_MILLIS_ON_PEEK_FULL_CHANNEL!=0{
             match uri_sink.poll_ready() {
                 Ok(_) => {},
@@ -89,6 +63,7 @@ pub fn url_enqueuer(mut uri_sink: futures::sync::mpsc::Sender<hyper::Uri>, urls_
         }
 
         urls_enqueued.fetch_add(1, sync::atomic::Ordering::Relaxed);
+
         if SLEEP_MILLIS_PER_ITER!=0{
             thread::sleep(sleep_duration_per_iter);
         }

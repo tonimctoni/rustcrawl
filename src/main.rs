@@ -24,6 +24,7 @@ mod url_enqueuer;
 
 const CHANNEL_BUFFER_SIZE: usize = 1024;
 const SLEEP_MILLIS_BETWEEN_REPORTS: u64 = 6000;
+const GET_TIMEOUT_MILLIS: u64 = 5000;
 const REPORT_FILENAME: &str = "report.txt";
 
 fn main() {
@@ -110,88 +111,38 @@ fn main() {
         Other,
     }
 
-    // let mut c=0;
-    // let work=uri_stream.and_then(|uri| {
-    //     let uri_string=uri.to_string();
-    //     // println!("{}, {}", c, uri_string);
-    //     println!("{}, {}", c, uri.host().unwrap_or(""));
-    //     c+=1;
-    //     client.get(uri)
-    //     .map_err(|e| println!("Error (Client.get): {:?}", e))
-    //     .and_then(|res|{
-    //         // let content_type=match res.headers().get::<hyper::header::ContentType>(){
-    //         //     Some(content_type) => {
-    //         //         let mimetype=(content_type.type_(), content_type.subtype());
-    //         //         if mimetype.0=="text" && mimetype.1=="html"{
-    //         //             ContentType::Html
-    //         //         } else if mimetype.0=="text" && mimetype.1=="css"{
-    //         //             ContentType::Css
-    //         //         } else{
-    //         //             ContentType::Other
-    //         //         }
-    //         //     },
-    //         //     None => ContentType::Other,
-    //         // };
-
-    //         // match content_type {
-    //         //     ContentType::Html => {
-    //         //         res.body().concat2()
-    //         //         .map_err(|e| println!("Error (Response.body().concat2): {:?}", e))
-    //         //         .and_then(|chunks|
-    //         //             html_sender.send((uri_string, chunks.to_vec()))
-    //         //             .map_err(|e| println!("Error (html_sender.send): {:?}", e))
-    //         //             .map(|_| ())
-    //         //         )
-    //         //     },
-    //         //     ContentType::Css => {
-    //         //         res.body().concat2()
-    //         //         .map_err(|e| println!("Error (Response.body().concat2): {:?}", e))
-    //         //         .and_then(|chunks|
-    //         //             css_sender.send(chunks.to_vec())
-    //         //             .map_err(|e| println!("Error (css_sender.send): {:?}", e))
-    //         //             .map(|_| ())
-    //         //         )
-    //         //     },
-    //         //     ContentType::Other => Err(()),
-    //         // }
-
-    //         res.body().concat2()
-    //         .map_err(|e| println!("Error (Response.body().concat2): {:?}", e))
-    //         .and_then(|chunks|
-    //             html_sender.send((uri_string, chunks.to_vec()))
-    //             .map_err(|e| println!("Error (html_sender.send): {:?}", e))
-    //         )
-    //     })
-    //     .or_else(|_| Ok(()))
-    // }).for_each(|_| Ok(()));
-
-    // let mut c=0;
-    // let work=uri_stream.and_then(|uri| {
-    //     let uri_string=uri.to_string();
-    //     println!("{}, {}", c, uri.host().unwrap_or(""));
-    //     c+=1;
-    //     client.get(uri)
-    // })
-    // .map_err(|e| println!("Error (Client.get): {:?}", e))
-    // .and_then(|res|{
-    //     res.body().concat2()
-    // })
-    // .map_err(|e| println!("Error (Response.body().concat2): {:?}", e))
-    // .and_then(|chunks|{
-    //     html_sender.send((uri_string, chunks.to_vec()))
-    // })
-    // .map_err(|e| println!("Error (html_sender.send): {:?}", e))
-    // .for_each(|_| Ok(()));
-
-    // let mut c=0;
     let work=uri_stream.and_then(|uri| {
         let uri_string=uri.to_string();
         let c=urls_gotten.fetch_add(1, sync::atomic::Ordering::Relaxed);
         println!("{}, {}", c, uri.host().unwrap_or(""));
-        // c+=1;
+
+        let timeout=(||{
+                    loop {
+                        match tokio_core::reactor::Timeout::new(time::Duration::from_millis(GET_TIMEOUT_MILLIS), &handle) {
+                            Ok(timeout) => {
+                                return timeout
+                            },
+                            Err(e) => {
+                                println!("Error (Timeout.new): {:?}", e);
+                                continue
+                            },
+                        }
+                    }
+                })();
+
         client.get(uri)
+        .select2(timeout)
+        .then(|res|{
+            match res {
+                Ok(futures::future::Either::A((got, _))) => Ok(got),
+                Ok(futures::future::Either::B((timeout, _))) => {println!("Error (timeout ok): {:?}", timeout);Err(())},
+                Err(futures::future::Either::A((get_error, _))) => {println!("Error (Client.get err): {:?}", get_error);Err(())},
+                Err(futures::future::Either::B((timeout_error, _))) => {println!("Error (timeout err): {:?}", timeout_error);Err(())},
+                // Err(e) => {println!("Error (Client.get/Timeout): {:?}", e);Err(())},
+            }
+        })
         .map(move |r| (r, uri_string))
-        .map_err(|e| println!("Error (Client.get): {:?}", e))
+        // .map_err(|e| println!("Error (Client.get): {:?}", e))
     })
     .and_then(|(res, uri_string)|{
         let content_type=match res.headers().get::<hyper::header::ContentType>(){
@@ -237,8 +188,8 @@ fn main() {
 
 
     match core.run(work) {
-        Ok(o) => println!("Ok: {:?}", o),
-        Err(e) => println!("Error: {:?}", e),
+        Ok(o) => println!("Ok (Core.run): {:?}", o),
+        Err(e) => println!("Error (Core.run): {:?}", e),
     }
 
     println!("IO loop terminated.");

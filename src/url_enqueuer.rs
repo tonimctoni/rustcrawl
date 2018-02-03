@@ -6,7 +6,7 @@ use std::thread;
 use std::sync;
 use std::time;
 
-const SLEEP_MILLIS_PER_ITER: u64 = 125;
+const SLEEP_MILLIS_PER_ITER: u64 = 50;
 const SLEEP_MILLIS_ON_EMPTY_RESERVOIR: u64 = 2000;
 const SLEEP_MILLIS_ON_FULL_CHANNEL: u64 = 60000;
 const SLEEP_MILLIS_ON_PEEK_FULL_CHANNEL: u64 = 0;

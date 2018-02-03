@@ -21,10 +21,33 @@ mod css_worker;
 mod html_worker;
 mod url_enqueuer;
 
-const CHANNEL_BUFFER_SIZE: usize = 1024*10;
-const SLEEP_MILLIS_BETWEEN_REPORTS: u64 = 6000;
-const GET_TIMEOUT_MILLIS: u64 = 5000;
+const CHANNEL_BUFFER_SIZE: usize = 1024;
+const FUTURE_STREAM_BUFFER_SIZE: usize = 100;
+const SLEEP_MILLIS_BETWEEN_REPORTS: u64 = 60000;
+const GET_TIMEOUT_MILLIS: u64 = 4000;
 const REPORT_FILENAME: &str = "report.txt";
+
+// Declare enum needed to distinguish between contenttypes of gotten urls.
+#[derive(PartialEq, Copy, Clone)]
+enum ContentType {
+    Html,
+    Css,
+    Other,
+}
+
+fn get_timeout(handle: &tokio_core::reactor::Handle) -> tokio_core::reactor::Timeout {
+    loop {
+        match tokio_core::reactor::Timeout::new(time::Duration::from_millis(GET_TIMEOUT_MILLIS), &handle) {
+            Ok(timeout) => {
+                return timeout
+            },
+            Err(e) => {
+                println!("Error (Timeout.new): {:?}", e);
+                continue;
+            },
+        }
+    }
+}
 
 fn main() {
     // Define channels for html and css code.
@@ -75,6 +98,7 @@ fn main() {
     {
         let urls_gotten=urls_gotten.clone();
         thread::spawn(move || {
+            let mut last_gotten=0;
             let sleep_duration_per_iter=time::Duration::from_millis(SLEEP_MILLIS_BETWEEN_REPORTS);
             for i in 0.. {
                 thread::sleep(sleep_duration_per_iter);
@@ -92,17 +116,20 @@ fn main() {
                     mutex_guard.len()
                 };
 
-                match f.write_all(format!("[report ({})] urls enqueued: {}, urls gotten: {}, htmls crawled: {}, css written: {}, reservoir contains: {}\n",
+                let gotten=urls_gotten.load(sync::atomic::Ordering::Relaxed);
+                match f.write_all(format!("[report ({})] urls enqueued: {}, urls gotten: {}, htmls crawled: {}, css written: {}, reservoir contains: {}, get requests per second: {}\n",
                     i,
                     urls_enqueued.load(sync::atomic::Ordering::Relaxed),
-                    urls_gotten.load(sync::atomic::Ordering::Relaxed),
+                    gotten,
                     htmls_crawled.load(sync::atomic::Ordering::Relaxed),
                     css_written.load(sync::atomic::Ordering::Relaxed),
-                    reservoir_len
+                    reservoir_len,
+                    ((gotten-last_gotten) as f64)/((SLEEP_MILLIS_BETWEEN_REPORTS as f64) / 1000.0)
                     ).as_bytes()) {
                     Ok(_) => {},
                     Err(e) => println!("Error (reporting): {:?}", e),
                 }
+                last_gotten=gotten;
             }
             println!("Reporter terminated.");
         });
@@ -113,122 +140,61 @@ fn main() {
     let handle = core.handle();
     let client = hyper::Client::new(&handle);
 
-    // Declare enum needed to distinguish between contenttypes of gotten urls.
-    #[derive(PartialEq)]
-    enum ContentType {
-        Html,
-        Css,
-        Other,
-    }
-
-    // Define operations to be run on stram of uris.
+    // Prepare work for the core.
     let work=uri_stream
-    // Get uri with client.
-    .and_then(|uri| {
-        let uri_string=uri.to_string();
-        // Keep track of number of uris received at stream.
+    .map(|uri|{
         let c=urls_gotten.fetch_add(1, sync::atomic::Ordering::Relaxed);
         println!("{}, {}", c, uri.host().unwrap_or(""));
 
-        // Define a timeout future. On error, try again in a loop.
-        let timeout=(||{
-                    loop {
-                        match tokio_core::reactor::Timeout::new(time::Duration::from_millis(GET_TIMEOUT_MILLIS), &handle) {
-                            Ok(timeout) => {
-                                return timeout
-                            },
-                            Err(e) => {
-                                println!("Error (Timeout.new): {:?}", e);
-                                continue
-                            },
-                        }
-                    }
-                })();
+        let timeout=get_timeout(&handle);
+        let uri_string=uri.to_string();
 
-        // Actually get the uri with client or get a timeout, whichever happens first.
-        // On timeout, print and give error.
         client.get(uri)
-        .select2(timeout)
-        .then(|res|{
-            match res {
-                Ok(futures::future::Either::A((got, _))) => Ok(got),
-                Ok(futures::future::Either::B((timeout, _))) => {println!("Error (get timeout ok): {:?}", timeout);Err(())},
-                Err(futures::future::Either::A((get_error, _))) => {println!("Error (Client.get err): {:?}", get_error);Err(())},
-                Err(futures::future::Either::B((timeout_error, _))) => {println!("Error (get timeout err): {:?}", timeout_error);Err(())},
-            }
-        })
-        .map(move |r| (r, uri_string))
-    })
-    // Get the content type and concatenate Chunks of content body.
-    .and_then(|(res, uri_string)|{
-        let content_type=match res.headers().get::<hyper::header::ContentType>(){
-            Some(content_type) => {
-                let mimetype=(content_type.type_(), content_type.subtype());
-                if mimetype.0=="text" && mimetype.1=="html"{
-                    ContentType::Html
-                } else if mimetype.0=="text" && mimetype.1=="css"{
-                    ContentType::Css
-                } else{
-                    ContentType::Other
-                }
-            },
-            None => ContentType::Other,
-        };
-
-        // Define a timeout future. On error, try again in a loop.
-        let timeout=(||{
-                    loop {
-                        match tokio_core::reactor::Timeout::new(time::Duration::from_millis(GET_TIMEOUT_MILLIS), &handle) {
-                            Ok(timeout) => {
-                                return timeout
-                            },
-                            Err(e) => {
-                                println!("Error (Timeout.new): {:?}", e);
-                                continue
-                            },
-                        }
+        .and_then(|res| {
+            let content_type=match res.headers().get::<hyper::header::ContentType>(){
+                Some(content_type) => {
+                    let mimetype=(content_type.type_(), content_type.subtype());
+                    if mimetype.0=="text" && mimetype.1=="html"{
+                        ContentType::Html
+                    } else if mimetype.0=="text" && mimetype.1=="css"{
+                        ContentType::Css
+                    } else{
+                        ContentType::Other
                     }
-                })();
+                },
+                None => ContentType::Other,
+            };
 
-        // Concatenate chunks if body or get a timeout, whichever happens first.
-        // On timeout, print and give error.
-        res.body().concat2()
-        .select2(timeout)
-        .then(|res|{
-            match res {
-                Ok(futures::future::Either::A((chunks, _))) => Ok(chunks),
-                Ok(futures::future::Either::B((timeout, _))) => {println!("Error (concat timeout ok): {:?}", timeout);Err(())},
-                Err(futures::future::Either::A((chunks_error, _))) => {println!("Error (Response.body().concat2 err): {:?}", chunks_error);Err(())},
-                Err(futures::future::Either::B((timeout_error, _))) => {println!("Error (concat timeout err): {:?}", timeout_error);Err(())},
+            res.body().concat2().map(move |res| (res, content_type))
+        })
+        .select2(timeout).then(|t| {
+            match t {
+                Ok(futures::future::Either::B((timeout, _))) => {println!("Error (get timeout ok): {:?}", timeout);Ok(())},
+                Err(futures::future::Either::A((get_error, _))) => {println!("Error (Client.get err): {:?}", get_error);Ok(())},
+                Err(futures::future::Either::B((timeout_error, _))) => {println!("Error (get timeout err): {:?}", timeout_error);Ok(())},
+                // Ok(futures::future::Either::A((got, _))) => Ok(got),
+                Ok(futures::future::Either::A(((chunks, content_type), _))) => {
+                    match content_type {
+                        ContentType::Html => {
+                            match html_sender.send((uri_string, chunks.to_vec())) {
+                                Err(e) => println!("Error (html_sender.send): {:?}", e),
+                                _ => {},
+                            }
+                        },
+                        ContentType::Css => {
+                            match css_sender.send(chunks.to_vec()) {
+                                Err(e) => println!("Error (css_sender.send): {:?}", e),
+                                _ => {},
+                            }
+                        },
+                        ContentType::Other => {},
+                    }
+                    Ok(())
+                },
             }
         })
-        .map(move |r| (r, uri_string, content_type))
     })
-    // Filter out content that is not html or css.
-    .filter(|t| (*t).2!=ContentType::Other)
-    // Send content through the appropiate channel.
-    .and_then(|(chunks, uri_string, content_type)|{
-        match content_type {
-            ContentType::Html => {
-                html_sender.send((uri_string, chunks.to_vec()))
-                .map_err(|e| println!("Error (html_sender.send): {:?}", e))
-            },
-            ContentType::Css => {
-                css_sender.send(chunks.to_vec())
-                .map_err(|e| println!("Error (css_sender.send): {:?}", e))
-            },
-            _ => panic!("ContentType::Other should have been filtered out"),
-        }
-    })
-    // Make sure no error reaches the `for_each`. The else is there so rust knows the error type.
-    .or_else(|_| {
-        if true{
-            Ok(())
-        } else {
-            Err(())
-        }
-    })
-    // Finally, run all operations on stream.
+    .buffer_unordered(FUTURE_STREAM_BUFFER_SIZE)
     .for_each(|_| Ok(()));
 
 

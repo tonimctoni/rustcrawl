@@ -77,7 +77,7 @@ Also, it uses async IO, which is more elegant than a bunch of worker threads. It
 
  - Make sure magic numbers/strings are gone.
 
- - Make sure url content that is not html or css gets discarded.
+ - Make sure url content that is not html or css gets discarded before it gets gotten by client.
 
 <!--  - Add timeout to getting chunks too. -->
 

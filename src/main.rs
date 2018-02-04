@@ -174,10 +174,9 @@ fn main() {
         .select2(timeout)
         .then(|t| {
             match t {
-                Ok(futures::future::Either::B((timeout, _))) => {eprintln!("Error (get timeout ok): {:?}", timeout);Ok(())},
+                Ok(futures::future::Either::B((_, _))) => {eprintln!("Error (get timeout ok): {:?}", uri_string);Ok(())},
                 Err(futures::future::Either::A((get_error, _))) => {eprintln!("Error (Client.get err): {:?}", get_error);Ok(())},
                 Err(futures::future::Either::B((timeout_error, _))) => {eprintln!("Error (get timeout err): {:?}", timeout_error);Ok(())},
-                // Ok(futures::future::Either::A((got, _))) => Ok(got),
                 Ok(futures::future::Either::A(((chunks, content_type), _))) => {
                     match content_type {
                         ContentType::Html => {

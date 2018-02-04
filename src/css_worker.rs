@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use bloom_filter;
 use regex;
 use std::sync;
@@ -62,13 +61,13 @@ pub fn css_worker(css_receiver: sync::mpsc::Receiver<Vec<u8>>, css_written: sync
         // Make sure it contains valide utf8 only and turn into a String.
         let mut css_content=match String::from_utf8(css_content) {
             Ok(css_content) => css_content,
-            Err(e) => {println!("Error (css_worker): {:?}", e.utf8_error());continue;},
+            Err(e) => {eprintln!("Error (css_worker): {:?}", e.utf8_error());continue;},
         };
 
         // Transform to lower case.
         css_content=css_content.to_lowercase();
         if !contains_only_allowed_chars(&css_content){
-            println!("Error (css_worker): {:?}", "css contains disallowed chars");
+            eprintln!("Error (css_worker): {:?}", "css contains disallowed chars");
             continue;
         }
 
@@ -78,19 +77,19 @@ pub fn css_worker(css_receiver: sync::mpsc::Receiver<Vec<u8>>, css_written: sync
         css_content=css_content.trim().to_string();
         // If the code is too small, discard and continue.
         if css_content.len()<=50{
-            println!("Error (css_worker): {:?}", "css len less than 50");
+            eprintln!("Error (css_worker): {:?}", "css len less than 50");
             continue;
         }
 
         // If code has too few newlines, discard and continue.
         if css_content.chars().filter(|&c| c==newline_char).count()<5{
-            println!("Error (css_worker): {:?}", "css has fewer than 5 newline chars");
+            eprintln!("Error (css_worker): {:?}", "css has fewer than 5 newline chars");
             continue;
         }
 
         // If code was saved into a file before, discard and continue.
         if bloom_filter.contains_add(css_content.as_bytes()){
-            println!("Error (css_worker): {:?}", "css was already gathered");
+            eprintln!("Error (css_worker): {:?}", "css was already gathered");
             continue;
         }
 
@@ -98,18 +97,18 @@ pub fn css_worker(css_receiver: sync::mpsc::Receiver<Vec<u8>>, css_written: sync
         c+=1;
         let mut f=match fs::File::create(format!("css/css{:06}.css", c)) {
             Ok(f) => f,
-            Err(e) => {println!("Error (css_worker): {:?}", e);continue;},
+            Err(e) => {eprintln!("Error (css_worker): {:?}", e);continue;},
         };
 
         // Save code to file.
         match f.write_all(css_content.as_bytes()) {
             Ok(_) => (),
-            Err(e) => {println!("Error (css_worker): {:?}", e);continue;},
+            Err(e) => {eprintln!("Error (css_worker): {:?}", e);continue;},
         }
 
         // Keep track of number css files created with atomic counter `css_written`.
         css_written.fetch_add(1, sync::atomic::Ordering::Relaxed);
     }
 
-    println!("Css worker terminated.");
+    eprintln!("Css worker terminated.");
 }

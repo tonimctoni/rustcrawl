@@ -26,13 +26,15 @@ impl UrlReservoir {
     }
 
     /// Returns the ammount of strings contained within the UrlReservoir structure
+    #[inline]
     pub fn len(&self) -> usize{
         self.urls.len()
     }
 
     /// Returns the ammount of strings that could be added to the UrlReservoir
     /// structure before the strings it already contains start having to be removed.
-    pub fn available_space(&self) -> usize{
+    #[inline]
+    fn available_space(&self) -> usize{
         self.urls.capacity()-self.urls.len()
     }
 

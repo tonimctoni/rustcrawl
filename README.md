@@ -35,7 +35,7 @@ Also, it uses async IO, which is more elegant than a bunch of worker threads. It
 <!--  - Add logger struct that logs errors.
     - Actually, maybe just print to stdout (or stderr). -->
 
- - Make sure to use large unique when deploying.
+ - Make sure to use large bloom filter when deploying.
 
 <!--  - Use atomic counter to count gathered and visited pages. Maybe log this every so often. Also count css files. -->
 
@@ -50,7 +50,7 @@ Also, it uses async IO, which is more elegant than a bunch of worker threads. It
 
  - Make sure stuff works with only one thread too. So far so good.
 
- - Remove #![allow(dead_code)].
+<!--  - Remove #![allow(dead_code)]. -->
 
 <!--  - Maybe use buffer_unordered. -->
 

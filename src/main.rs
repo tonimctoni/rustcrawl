@@ -1,4 +1,3 @@
-// #![feature(drain_filter)]
 #![feature(box_syntax)]
 
 extern crate rand;
@@ -42,7 +41,7 @@ fn get_timeout(handle: &tokio_core::reactor::Handle) -> tokio_core::reactor::Tim
                 return timeout
             },
             Err(e) => {
-                println!("Error (Timeout.new): {:?}", e);
+                eprintln!("Error (Timeout.new): {:?}", e);
                 continue;
             },
         }
@@ -104,20 +103,24 @@ fn main() {
                 thread::sleep(sleep_duration_per_iter);
                 let mut f=match fs::OpenOptions::new().append(true).create(true).open(REPORT_FILENAME) {
                     Ok(f) => f,
-                    Err(e) => {println!("Error (reporting): {:?}", e);continue;},
+                    Err(e) => {
+                        eprintln!("Error (reporting): {:?}", e);
+                        last_gotten=urls_gotten.load(sync::atomic::Ordering::Relaxed);
+                        continue;
+                    },
                 };
 
                 let reservoir_len={
                     let mutex_guard=match url_reservoir.lock() {
                         Ok(mutex_guard) => mutex_guard,
-                        Err(e) => {println!("Error (reporting): {:?}", e);break;},
+                        Err(e) => {eprintln!("Error (reporting): {:?}", e);break;},
                     };
 
                     mutex_guard.len()
                 };
 
                 let gotten=urls_gotten.load(sync::atomic::Ordering::Relaxed);
-                match f.write_all(format!("[report ({})] urls enqueued: {}, urls gotten: {}, htmls crawled: {}, css written: {}, reservoir contains: {}, get requests per second: {}\n",
+                match f.write_all(format!("[report ({})] urls enqueued: {}, urls gotten: {}, htmls crawled: {}, css written: {}, reservoir contains: {}, get requests per second: {:.2}\n",
                     i,
                     urls_enqueued.load(sync::atomic::Ordering::Relaxed),
                     gotten,
@@ -127,11 +130,11 @@ fn main() {
                     ((gotten-last_gotten) as f64)/((SLEEP_MILLIS_BETWEEN_REPORTS as f64) / 1000.0)
                     ).as_bytes()) {
                     Ok(_) => {},
-                    Err(e) => println!("Error (reporting): {:?}", e),
+                    Err(e) => eprintln!("Error (reporting): {:?}", e),
                 }
                 last_gotten=gotten;
             }
-            println!("Reporter terminated.");
+            eprintln!("Reporter terminated.");
         });
     }
 
@@ -145,6 +148,7 @@ fn main() {
     .map(|uri|{
         let c=urls_gotten.fetch_add(1, sync::atomic::Ordering::Relaxed);
         println!("{}, {}", c, uri.host().unwrap_or(""));
+        // println!("{}", uri);
 
         let timeout=get_timeout(&handle);
         let uri_string=uri.to_string();
@@ -167,23 +171,24 @@ fn main() {
 
             res.body().concat2().map(move |res| (res, content_type))
         })
-        .select2(timeout).then(|t| {
+        .select2(timeout)
+        .then(|t| {
             match t {
-                Ok(futures::future::Either::B((timeout, _))) => {println!("Error (get timeout ok): {:?}", timeout);Ok(())},
-                Err(futures::future::Either::A((get_error, _))) => {println!("Error (Client.get err): {:?}", get_error);Ok(())},
-                Err(futures::future::Either::B((timeout_error, _))) => {println!("Error (get timeout err): {:?}", timeout_error);Ok(())},
+                Ok(futures::future::Either::B((timeout, _))) => {eprintln!("Error (get timeout ok): {:?}", timeout);Ok(())},
+                Err(futures::future::Either::A((get_error, _))) => {eprintln!("Error (Client.get err): {:?}", get_error);Ok(())},
+                Err(futures::future::Either::B((timeout_error, _))) => {eprintln!("Error (get timeout err): {:?}", timeout_error);Ok(())},
                 // Ok(futures::future::Either::A((got, _))) => Ok(got),
                 Ok(futures::future::Either::A(((chunks, content_type), _))) => {
                     match content_type {
                         ContentType::Html => {
                             match html_sender.send((uri_string, chunks.to_vec())) {
-                                Err(e) => println!("Error (html_sender.send): {:?}", e),
+                                Err(e) => eprintln!("Error (html_sender.send): {:?}", e),
                                 _ => {},
                             }
                         },
                         ContentType::Css => {
                             match css_sender.send(chunks.to_vec()) {
-                                Err(e) => println!("Error (css_sender.send): {:?}", e),
+                                Err(e) => eprintln!("Error (css_sender.send): {:?}", e),
                                 _ => {},
                             }
                         },
@@ -200,9 +205,9 @@ fn main() {
 
     // Run work (operations on stream) in tokio core.
     match core.run(work) {
-        Ok(o) => println!("Ok (Core.run): {:?}", o),
-        Err(e) => println!("Error (Core.run): {:?}", e),
+        Ok(o) => eprintln!("Ok (Core.run): {:?}", o),
+        Err(e) => eprintln!("Error (Core.run): {:?}", e),
     }
 
-    println!("IO loop terminated.");
+    eprintln!("IO loop terminated.");
 }

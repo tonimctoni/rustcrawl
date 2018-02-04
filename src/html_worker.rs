@@ -1,5 +1,3 @@
-// #![feature(drain_filter)]
-#![allow(dead_code)]
 use bloom_filter;
 use url_reservoir;
 use regex;
@@ -29,13 +27,13 @@ pub fn html_worker(html_receiver: sync::mpsc::Receiver<(String,Vec<u8>)>, htmls_
         // Transform the url string into the Url type.
         let url=match url::Url::parse(url.as_str()) {
             Ok(url) => url,
-            Err(e) => {println!("Error (html_worker): {:?}", e);continue;},
+            Err(e) => {eprintln!("Error (html_worker): {:?}", e);continue;},
         };
 
         // Make sure the html content contains only valid utf8 characters and transform it into a string.
         let html_content=match String::from_utf8(html_content) {
             Ok(html_content) => html_content,
-            Err(e) => {println!("Error (html_worker): {:?}", e.utf8_error());continue;},
+            Err(e) => {eprintln!("Error (html_worker): {:?}", e.utf8_error());continue;},
         };
 
         hosts_nums.clear();
@@ -44,20 +42,20 @@ pub fn html_worker(html_receiver: sync::mpsc::Receiver<(String,Vec<u8>)>, htmls_
             // Grab the actual url from the regex structure.
             let cap=match cap.get(1) {
                 Some(cap) => cap,
-                None => {println!("Error (html_worker): {:?}", "cannot get regex cap 1");continue;},
+                None => {eprintln!("Error (html_worker): {:?}", "cannot get regex cap 1");continue;},
             };
 
             // Transform the url to an "absolute path" url.
             let url=match url.join(cap.as_str()) {
                 Ok(url) => url,
-                Err(e) => {println!("Error (html_worker): {:?}", e);continue;},
+                Err(e) => {eprintln!("Error (html_worker): {:?}", e);continue;},
             };
 
             // Make sure only a few url with the same host are gotten.
             let surpassed_host_num_limit={
                 let host=match url.host_str() {
                     Some(host) => host,
-                    None => {println!("Error (html_worker): {:?}", "no host");continue;},
+                    None => {eprintln!("Error (html_worker): {:?}", "no host");continue;},
                 };
 
                 (||{
@@ -90,7 +88,7 @@ pub fn html_worker(html_receiver: sync::mpsc::Receiver<(String,Vec<u8>)>, htmls_
         if !urls.is_empty(){
             let mutex_guard=match bloom_filter.lock() {
                 Ok(mutex_guard) => mutex_guard,
-                Err(e) => {println!("Error (html_worker): {:?}", e);break;},
+                Err(e) => {eprintln!("Error (html_worker): {:?}", e);break;},
             };
 
             urls.retain(|u| !mutex_guard.contains(u.as_bytes()));
@@ -100,7 +98,7 @@ pub fn html_worker(html_receiver: sync::mpsc::Receiver<(String,Vec<u8>)>, htmls_
         if !urls.is_empty(){
             let mut mutex_guard=match url_reservoir.lock() {
                 Ok(mutex_guard) => mutex_guard,
-                Err(e) => {println!("Error (html_worker): {:?}", e);break;},
+                Err(e) => {eprintln!("Error (html_worker): {:?}", e);break;},
             };
 
             mutex_guard.add_urls_popping(&mut urls);
@@ -111,5 +109,5 @@ pub fn html_worker(html_receiver: sync::mpsc::Receiver<(String,Vec<u8>)>, htmls_
         htmls_crawled.fetch_add(1, sync::atomic::Ordering::Relaxed);
     }
 
-    println!("Html worker terminated.");
+    eprintln!("Html worker terminated.");
 }

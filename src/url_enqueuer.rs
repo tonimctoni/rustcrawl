@@ -9,7 +9,7 @@ use std::time;
 const SLEEP_MILLIS_PER_ITER: u64 = 50;
 const SLEEP_MILLIS_ON_EMPTY_RESERVOIR: u64 = 2000;
 const SLEEP_MILLIS_ON_FULL_CHANNEL: u64 = 60000;
-const SLEEP_MILLIS_ON_PEEK_FULL_CHANNEL: u64 = 0;
+// const SLEEP_MILLIS_ON_PEEK_FULL_CHANNEL: u64 = 0;
 
 
 /// Within an endless loop, it obtains an url from the `url_reservoir` and sends
@@ -26,22 +26,22 @@ pub fn url_enqueuer(mut uri_sink: futures::sync::mpsc::Sender<hyper::Uri>, urls_
     let sleep_duration_per_iter=time::Duration::from_millis(SLEEP_MILLIS_PER_ITER);
     let sleep_duration_on_empty_reservoir=time::Duration::from_millis(SLEEP_MILLIS_ON_EMPTY_RESERVOIR);
     let sleep_duration_on_full_channel=time::Duration::from_millis(SLEEP_MILLIS_ON_FULL_CHANNEL);
-    let sleep_duration_on_peek_full_channel=time::Duration::from_millis(SLEEP_MILLIS_ON_PEEK_FULL_CHANNEL);
+    // let sleep_duration_on_peek_full_channel=time::Duration::from_millis(SLEEP_MILLIS_ON_PEEK_FULL_CHANNEL);
 
     loop{
-        // If SLEEP_MILLIS_ON_PEEK_FULL_CHANNEL is not zero, peeks into the uri channel sink. If it cannot be used, sleep and continue.
-        if SLEEP_MILLIS_ON_PEEK_FULL_CHANNEL!=0{
-            match uri_sink.poll_ready() {
-                Ok(_) => {},
-                Err(e) => {println!("Error (url_enqueuer): {:?}", e);thread::sleep(sleep_duration_on_peek_full_channel);continue;},
-            }
-        }
+        // // If SLEEP_MILLIS_ON_PEEK_FULL_CHANNEL is not zero, peeks into the uri channel sink. If it cannot be used, sleep and continue.
+        // if SLEEP_MILLIS_ON_PEEK_FULL_CHANNEL!=0{
+        //     match uri_sink.poll_ready() {
+        //         Ok(_) => {},
+        //         Err(e) => {eprintln!("Error (url_enqueuer): {:?}", e);thread::sleep(sleep_duration_on_peek_full_channel);continue;},
+        //     }
+        // }
 
         // Gets a url from the url reservoir if not empty.
         let maybe_url={
             let mut mutex_guard=match url_reservoir.lock() {
                 Ok(mutex_guard) => mutex_guard,
-                Err(e) => {println!("Error (url_enqueuer): {:?}", e);break;},
+                Err(e) => {eprintln!("Error (url_enqueuer): {:?}", e);break;},
             };
 
             mutex_guard.get_url()
@@ -50,33 +50,33 @@ pub fn url_enqueuer(mut uri_sink: futures::sync::mpsc::Sender<hyper::Uri>, urls_
         // If url was not gotten, because the url reservoir was empty, sleep and continue.
         let url=match maybe_url {
             Some(url) => url,
-            None => {println!("Error (url_enqueuer): {:?}", "reservoir is empty");thread::sleep(sleep_duration_on_empty_reservoir);continue;},
+            None => {eprintln!("Error (url_enqueuer): {:?}", "reservoir is empty");thread::sleep(sleep_duration_on_empty_reservoir);continue;},
         };
 
         // Uses bloom filter to make sure url was not sent before already. If so, continue.
         let url_has_been_used={
             let mut mutex_guard=match bloom_filter.lock() {
                 Ok(mutex_guard) => mutex_guard,
-                Err(e) => {println!("Error (url_enqueuer): {:?}", e);break;},
+                Err(e) => {eprintln!("Error (url_enqueuer): {:?}", e);break;},
             };
 
             mutex_guard.contains_add(url.as_bytes())
         };
         if url_has_been_used{
-            println!("Error (url_enqueuer): {:?}", "url_has_been_used");
+            eprintln!("Error (url_enqueuer): {:?}", "url_has_been_used");
             continue;
         }
 
         // Make a uri to use with Client.get out of url string. On error, continue.
         let uri=match url.parse::<hyper::Uri>() {
             Ok(uri) => uri,
-            Err(e) => {println!("Error (url_enqueuer): {:?}", e);continue;},
+            Err(e) => {eprintln!("Error (url_enqueuer): {:?}", e);continue;},
         };
 
         // Try to send uri via uri channel sink. If not possible (probably because it is full), sleep and continue.
         match uri_sink.try_send(uri) {
             Ok(_) => {},
-            Err(e) => {println!("Error (url_enqueuer): {:?}", e);thread::sleep(sleep_duration_on_full_channel);continue;},
+            Err(e) => {eprintln!("Error (url_enqueuer): {:?}", e);thread::sleep(sleep_duration_on_full_channel);continue;},
         }
 
         // Keep track of number of uris sent with atomic counter `urls_enqueued`.
@@ -88,5 +88,5 @@ pub fn url_enqueuer(mut uri_sink: futures::sync::mpsc::Sender<hyper::Uri>, urls_
         }
     }
 
-    println!("Url enqueuer terminated.");
+    eprintln!("Url enqueuer terminated.");
 }

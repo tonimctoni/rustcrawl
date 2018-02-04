@@ -85,12 +85,12 @@ fn get_urls_send_css(url: url::Url, client: &reqwest::Client, re: &regex::Regex,
             for cap in re.captures_iter(response_text.as_str()).take(MAX_URLS_PER_SITE){
                 let cap=match cap.get(1) {
                     Some(expr) => expr,
-                    None => {println!("Error: {:?}", "cannot get regex cap 1");continue;},
+                    None => {eprintln!("Error: {:?}", "cannot get regex cap 1");continue;},
                 };
 
                 let url=match url.join(cap.as_str()) {
                     Ok(expr) => expr.into_string(),
-                    Err(e) => {println!("Error: {:?}", e);continue;},
+                    Err(e) => {eprintln!("Error: {:?}", e);continue;},
                 };
 
                 urls.push(url);
@@ -132,12 +132,12 @@ pub fn worker(mut css_sender: sync::mpsc::Sender<String>, bloom_filter: sync::Ar
         let url={
             let mut mutex_guard=match url_reservoir.lock() {
                 Ok(mutex_guard) => mutex_guard,
-                Err(e) => {println!("Error: {:?}", e);break;},
+                Err(e) => {eprintln!("Error: {:?}", e);break;},
             };
 
             match mutex_guard.get_url() {
                 Some(url) => url,
-                None => {println!("Error: {:?}", "reservoir is empty");continue;},
+                None => {eprintln!("Error: {:?}", "reservoir is empty");continue;},
             }
         };
 
@@ -145,26 +145,26 @@ pub fn worker(mut css_sender: sync::mpsc::Sender<String>, bloom_filter: sync::Ar
         let url_has_been_used={
             let mut mutex_guard=match bloom_filter.lock() {
                 Ok(mutex_guard) => mutex_guard,
-                Err(e) => {println!("Error: {:?}", e);break;},
+                Err(e) => {eprintln!("Error: {:?}", e);break;},
             };
 
             mutex_guard.contains_add(url.as_bytes())
         };
         if url_has_been_used{
-            println!("Error: {:?}", "url_has_been_used");
+            eprintln!("Error: {:?}", "url_has_been_used");
             continue;
         }
 
         // Transform url from string to url format. Should not fail, since the string was gotten from a url. If it fails, continue.
         let url=match url::Url::parse(url.as_str()) {
             Ok(url) => url,
-            Err(e) => {println!("Error: {:?}", e);continue;},
+            Err(e) => {eprintln!("Error: {:?}", e);continue;},
         };
 
         // Crawl the url. On error continue.
         let mut urls=match get_urls_send_css(url, &client, &re, &mut css_sender) {
             Ok(urls) => urls,
-            Err(e) => {println!("Error: {:?}", e);continue;},
+            Err(e) => {eprintln!("Error: {:?}", e);continue;},
         };
 
         // Since url was crawled, increase counter.
@@ -178,7 +178,7 @@ pub fn worker(mut css_sender: sync::mpsc::Sender<String>, bloom_filter: sync::Ar
         let urls={
             let mutex_guard=match bloom_filter.lock() {
                 Ok(mutex_guard) => mutex_guard,
-                Err(e) => {println!("Error: {:?}", e);break;},
+                Err(e) => {eprintln!("Error: {:?}", e);break;},
             };
 
             urls.into_iter().filter(|u| !mutex_guard.contains(u.as_bytes())).collect::<Vec<_>>()
@@ -188,12 +188,12 @@ pub fn worker(mut css_sender: sync::mpsc::Sender<String>, bloom_filter: sync::Ar
         {
             let mut mutex_guard=match url_reservoir.lock() {
                 Ok(mutex_guard) => mutex_guard,
-                Err(e) => {println!("Error: {:?}", e);break;},
+                Err(e) => {eprintln!("Error: {:?}", e);break;},
             };
 
             mutex_guard.add_urls(urls);
         }
     }
 
-    println!("Worker terminated.");
+    eprintln!("Worker terminated.");
 }

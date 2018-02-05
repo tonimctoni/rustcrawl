@@ -35,20 +35,11 @@ Also, it uses async IO, which is more elegant than a bunch of worker threads. It
 <!--  - Add logger struct that logs errors.
     - Actually, maybe just print to stdout (or stderr). -->
 
- - Make sure to use large bloom filter when deploying.
-
 <!--  - Use atomic counter to count gathered and visited pages. Maybe log this every so often. Also count css files. -->
-
- - Document everything (as in, write comments and use rustdoc).
-    - Also comment within functions.
 
 <!--  - Use box syntax in unique module. -->
 
- - Test further by using.
-
 <!--  - Maybe use hyper, reqwest feels clunky. -->
-
- - Make sure stuff works with only one thread too. So far so good.
 
 <!--  - Remove #![allow(dead_code)]. -->
 
@@ -65,21 +56,31 @@ Also, it uses async IO, which is more elegant than a bunch of worker threads. It
 
 <!--  - Probably need some sort of timeout. -->
 
- - Add timestampt to report. Maybe start timer when program starts and report on timer.
-
 <!--  - Replace unwraps with expects.
     - Actually, I see no point in that anymore. -->
 
 <!--  - Limit the amount of crawled urls per site that share a host. Then remove MAX_URLS_PER_SITE.
     - Actually, just increase MAX_URLS_PER_SITE to like a thousand. -->
 
+<!--  - Add timeout to getting chunks too. -->
+
+<!--  - Make sure to use large bloom filter when deploying.
+
+ - Document everything (as in, write comments and use rustdoc).
+    - Also comment within functions.
+
+ - Test further by using.
+
+ - Make sure stuff works with only one thread too. So far so good.
+
+ - Add timestampt to report. Maybe start timer when program starts and report on timer.
+
  - See if IO loop can be improved for performance.
 
- - Make sure magic numbers/strings are gone.
+ - Make sure magic numbers/strings are gone. -->
 
  - Make sure url content that is not html or css gets discarded before it gets gotten by client.
 
-<!--  - Add timeout to getting chunks too. -->
 
 
 <!-- 

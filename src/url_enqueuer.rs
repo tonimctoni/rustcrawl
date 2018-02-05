@@ -6,9 +6,9 @@ use std::thread;
 use std::sync;
 use std::time;
 
-const SLEEP_MILLIS_PER_ITER: u64 = 10;
+const SLEEP_MILLIS_PER_ITER: u64 = 100;
 const SLEEP_MILLIS_ON_EMPTY_RESERVOIR: u64 = 2000;
-const SLEEP_MILLIS_ON_FULL_CHANNEL: u64 = 40000;
+const SLEEP_MILLIS_ON_FULL_CHANNEL: u64 = 60000;
 
 
 /// Within an endless loop, it obtains an url from the `url_reservoir` and sends

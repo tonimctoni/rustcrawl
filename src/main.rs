@@ -141,14 +141,17 @@ fn main() {
     // Define tokio Core and client to be used in/as IO loop.
     let mut core = tokio_core::reactor::Core::new().unwrap();
     let handle = core.handle();
-    let client = hyper::Client::new(&handle);
+    // let client = hyper::Client::new(&handle);
+    let client=hyper::Client::configure()
+    .keep_alive(false)
+    .keep_alive_timeout(Some(time::Duration::from_millis(GET_TIMEOUT_MILLIS)))
+    .build(&handle);
 
     // Prepare work for the core.
     let work=uri_stream
     .map(|uri|{
-        let c=urls_gotten.fetch_add(1, sync::atomic::Ordering::Relaxed);
-        println!("{}, {}", c, uri.host().unwrap_or(""));
-        // println!("{}", uri);
+        let _=urls_gotten.fetch_add(1, sync::atomic::Ordering::Relaxed);
+        // println!("{}, {}", c, uri.host().unwrap_or(""));
 
         let timeout=get_timeout(&handle);
         let uri_string=uri.to_string();

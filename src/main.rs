@@ -21,9 +21,9 @@ mod html_worker;
 mod url_enqueuer;
 
 const CHANNEL_BUFFER_SIZE: usize = 1024*8;
-const FUTURE_STREAM_BUFFER_SIZE: usize = 100*8;
+const FUTURE_STREAM_BUFFER_SIZE: usize = 200;
 const SLEEP_MILLIS_BETWEEN_REPORTS: u64 = 60000;
-const GET_TIMEOUT_MILLIS: u64 = 8000;
+const GET_TIMEOUT_MILLIS: u64 = 20000;
 const REPORT_FILENAME: &str = "report.txt";
 
 // Declare enum needed to distinguish between contenttypes of gotten urls.
@@ -59,6 +59,7 @@ fn main() {
     let urls_enqueued=sync::Arc::new(sync::atomic::AtomicUsize::new(0));
     let urls_gotten=sync::Arc::new(sync::atomic::AtomicUsize::new(0));
     let urls_processed=sync::Arc::new(sync::atomic::AtomicUsize::new(0));
+    let urls_timed_out=sync::Arc::new(sync::atomic::AtomicUsize::new(0));
 
     // Define a bloom filter and url reservoir to keep track of used urls and store them respectively.
     let bloom_filter=sync::Arc::new(sync::Mutex::new(bloom_filter::LargeBloomFilter::new(vec![0xb77c92ec, 0x660208ac])));
@@ -98,10 +99,12 @@ fn main() {
     {
         let urls_gotten=urls_gotten.clone();
         let urls_processed=urls_processed.clone();
+        let urls_timed_out=urls_timed_out.clone();
         thread::spawn(move || {
             let mut last_gotten=0;
             let mut last_processed=0;
             let mut last_css_gathered=0;
+            let mut last_timeouts=0;
             let sleep_duration_per_iter=time::Duration::from_millis(SLEEP_MILLIS_BETWEEN_REPORTS);
             for i in 0.. {
                 thread::sleep(sleep_duration_per_iter);
@@ -112,6 +115,7 @@ fn main() {
                         last_gotten=urls_gotten.load(sync::atomic::Ordering::Relaxed);
                         last_processed=urls_processed.load(sync::atomic::Ordering::Relaxed);
                         last_css_gathered=css_written.load(sync::atomic::Ordering::Relaxed);
+                        last_timeouts=urls_timed_out.load(sync::atomic::Ordering::Relaxed);
                         continue;
                     },
                 };
@@ -128,17 +132,34 @@ fn main() {
                 let gotten=urls_gotten.load(sync::atomic::Ordering::Relaxed);
                 let processed=urls_processed.load(sync::atomic::Ordering::Relaxed);
                 let css_gathered=css_written.load(sync::atomic::Ordering::Relaxed);
-                match f.write_all(format!("[report ({})] urls enqueued: {}, urls gotten: {}, urls processed: {}, htmls crawled: {}, css written: {}, reservoir contains: {}, get requests per second: {:.2}, requests processed per second: {:.2}, css gathered per second: {:.2}\n",
+                let timeouts=urls_timed_out.load(sync::atomic::Ordering::Relaxed);
+                // match f.write_all(format!("[report ({})] urls enqueued: {}, urls gotten: {}, urls processed: {}, htmls crawled: {}, css written: {}, reservoir contains: {}, get requests per second: {:.2}, requests processed per second: {:.2}, css gathered per second: {:.2}\n",
+                //     i,
+                //     urls_enqueued.load(sync::atomic::Ordering::Relaxed),
+                //     gotten,
+                //     processed,
+                //     htmls_crawled.load(sync::atomic::Ordering::Relaxed),
+                //     css_gathered,
+                //     reservoir_len,
+                //     ((gotten-last_gotten) as f64)/((SLEEP_MILLIS_BETWEEN_REPORTS as f64) / 1000.0),
+                //     ((processed-last_processed) as f64)/((SLEEP_MILLIS_BETWEEN_REPORTS as f64) / 1000.0),
+                //     ((css_gathered-last_css_gathered) as f64)/((SLEEP_MILLIS_BETWEEN_REPORTS as f64) / 1000.0),
+                //     ).as_bytes()) {
+                //     Ok(_) => {},
+                //     Err(e) => eprintln!("Error (reporting): {:?}", e),
+                // }
+// , htmls crawled: {}, css written: {} ({:.2} per second)
+// , reservoir contains: {}
+                let enqueued=urls_enqueued.load(sync::atomic::Ordering::Relaxed);
+                match f.write_all(format!("[report ({})]\nurls enqueued: {}, urls gotten: {} ({:.2} per second), difference: {}\nurls processed: {} ({:.2}%, {:.2} per second)\ntimeouts: {} ({:.2}%, {:.2} per second)\nother errors: {} ({:.2}%)\nhtmls crawled: {}, css written: {} ({:.2} per second)\nreservoir contains: {}\n\n",
                     i,
-                    urls_enqueued.load(sync::atomic::Ordering::Relaxed),
-                    gotten,
-                    processed,
+                    enqueued, gotten, ((gotten-last_gotten) as f64)/((SLEEP_MILLIS_BETWEEN_REPORTS as f64) / 1000.0), enqueued-gotten,
+                    processed, 100.0*(processed as f64)/(gotten as f64), ((processed-last_processed) as f64)/((SLEEP_MILLIS_BETWEEN_REPORTS as f64) / 1000.0),
+                    timeouts, 100.0*(timeouts as f64)/(gotten as f64), ((timeouts-last_timeouts) as f64)/((SLEEP_MILLIS_BETWEEN_REPORTS as f64) / 1000.0),
+                    gotten-processed-timeouts, 100.0*((gotten-processed-timeouts) as f64)/(gotten as f64),
                     htmls_crawled.load(sync::atomic::Ordering::Relaxed),
-                    css_gathered,
+                    css_gathered, ((css_gathered-last_css_gathered) as f64)/((SLEEP_MILLIS_BETWEEN_REPORTS as f64) / 1000.0),
                     reservoir_len,
-                    ((gotten-last_gotten) as f64)/((SLEEP_MILLIS_BETWEEN_REPORTS as f64) / 1000.0),
-                    ((processed-last_processed) as f64)/((SLEEP_MILLIS_BETWEEN_REPORTS as f64) / 1000.0),
-                    ((css_gathered-last_css_gathered) as f64)/((SLEEP_MILLIS_BETWEEN_REPORTS as f64) / 1000.0),
                     ).as_bytes()) {
                     Ok(_) => {},
                     Err(e) => eprintln!("Error (reporting): {:?}", e),
@@ -146,6 +167,7 @@ fn main() {
                 last_gotten=gotten;
                 last_processed=processed;
                 last_css_gathered=css_gathered;
+                last_timeouts=timeouts;
             }
             eprintln!("Reporter terminated.");
         });
@@ -190,7 +212,7 @@ fn main() {
         .select2(timeout)
         .then(|t| {
             match t {
-                Ok(futures::future::Either::B((_, _))) => {eprintln!("Error (get timeout ok): {:?}", uri_string);Ok(())},
+                Ok(futures::future::Either::B((_, _))) => {eprintln!("Error (get timeout ok): {:?}", uri_string);urls_timed_out.fetch_add(1, sync::atomic::Ordering::Relaxed);Ok(())},
                 Err(futures::future::Either::A((get_error, _))) => {eprintln!("Error (Client.get err): {:?}", get_error);Ok(())},
                 Err(futures::future::Either::B((timeout_error, _))) => {eprintln!("Error (get timeout err): {:?}", timeout_error);Ok(())},
                 Ok(futures::future::Either::A(((chunks, content_type), _))) => {

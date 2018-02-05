@@ -13,6 +13,16 @@ const MAX_URLS_PER_ITER: usize = 100;
 
 
 
+/// Within an endless loop, it obtains urls from the `url_reservoir` and sends them
+/// via `uri_sink` to be processed. It makes use of `bloom_filter` to not send the
+/// same url twice.
+///
+/// # Arguments
+///
+/// * `uri_sink` - Channel sink where suitable urls are sent through.
+/// * `urls_enqueued` - Atomic counter that counts the urls sent through `uri_sink`
+/// * `bloom_filter` - BloomFilter that keeps track of already sent urls.
+/// * `url_reservoir` - Large structure containing urls that could be sent.
 pub fn url_enqueuer(mut uri_sink: futures::sync::mpsc::Sender<hyper::Uri>, urls_enqueued: sync::Arc<sync::atomic::AtomicUsize>, bloom_filter: sync::Arc<sync::Mutex<bloom_filter::LargeBloomFilter>>, url_reservoir: sync::Arc<sync::Mutex<url_reservoir::UrlReservoir>>){
     let sleep_duration_after_send=time::Duration::from_millis(SLEEP_MILLIS_AFTER_SEND);
     let sleep_duration_on_empty_reservoir=time::Duration::from_millis(SLEEP_MILLIS_ON_EMPTY_RESERVOIR);
@@ -20,6 +30,7 @@ pub fn url_enqueuer(mut uri_sink: futures::sync::mpsc::Sender<hyper::Uri>, urls_
 
     let mut urls=Vec::with_capacity(MAX_URLS_PER_ITER);
     loop {
+        // Grab up to MAX_URLS_PER_ITER urls from the reservoir.
         {
             let mut mutex_guard=match url_reservoir.lock() {
                 Ok(mutex_guard) => mutex_guard,
@@ -35,13 +46,14 @@ pub fn url_enqueuer(mut uri_sink: futures::sync::mpsc::Sender<hyper::Uri>, urls_
             }
         };
 
+        // If no url was grabbed, continue.
         if urls.is_empty(){
             eprintln!("Error (url_enqueuer): {:?}", "reservoir is empty");
             thread::sleep(sleep_duration_on_empty_reservoir);
             continue;
         }
 
-
+        // Discard urls that have already been sent.
         {
             let mut mutex_guard=match bloom_filter.lock() {
                 Ok(mutex_guard) => mutex_guard,
@@ -51,6 +63,7 @@ pub fn url_enqueuer(mut uri_sink: futures::sync::mpsc::Sender<hyper::Uri>, urls_
             urls.retain(|u| !mutex_guard.contains_add(u.as_bytes()));
         }
 
+        // Send urls through the sink.
         for url in urls.iter(){
             let uri=match (*url).parse::<hyper::Uri>() {
                 Ok(uri) => uri,

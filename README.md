@@ -20,7 +20,7 @@ I want to, again, point out the little cpu consumption I had while using rust fo
 
 <!--  - If all threads use the same seed (which I dont know if they would) that is not a problem, as long as statistical properties for each individual thread are ok. -->
 
- - Relaxed ordering for counters should be enought. Maybe ask someone who knows though. Then again, who does knows.
+ - Relaxed ordering for counters should be enought. Maybe ask someone who knows though. Then again, who does know.
 
  - Using modulo to get random values within a range because rust's implementation of gen_range seems needlessly complicated to me.
 

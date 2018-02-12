@@ -193,6 +193,25 @@ pub fn murmur_hash3_32(input: &[u8], seed: u32) -> u32 {
 }
 
 
+pub struct MurmurHasherBuilder{
+    seed: u32
+}
+
+impl MurmurHasherBuilder {
+    pub fn new(seed: u32) -> MurmurHasherBuilder{
+        MurmurHasherBuilder{seed: seed}
+    }
+}
+
+impl hash::BuildHasher for MurmurHasherBuilder {
+    type Hasher=MurmurHasher;
+
+    fn build_hasher(&self) -> Self::Hasher{
+        MurmurHasher::new(self.seed)
+    }
+}
+
+
 pub struct MurmurHasher {
     h1: u64,
     h2: u64,
@@ -202,8 +221,8 @@ pub struct MurmurHasher {
 }
 
 impl MurmurHasher {
-    pub fn new(seed1: u64, seed2: u64) -> MurmurHasher{
-        MurmurHasher{h1: seed1, h2: seed2, len: 0, bytes: [0u8;16], used_bytes: 0}
+    pub fn new(seed: u32) -> MurmurHasher{
+        MurmurHasher{h1: seed as u64, h2: seed as u64, len: 0, bytes: [0u8;16], used_bytes: 0}
     }
 }
 
